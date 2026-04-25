@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-横纵分析法报告 Markdown → PDF 转换脚本 (WeasyPrint版)
+Markdown → PDF 转换脚本 (WeasyPrint版)
 用法: python md_to_pdf.py input.md output.pdf [--title "报告标题"] [--author "作者"]
 
 依赖: pip install weasyprint markdown --break-system-packages
@@ -201,7 +201,7 @@ a {
 """
 
 
-def md_to_html(md_text, title="横纵分析报告", subtitle="横纵分析法深度研究报告",
+def md_to_html(md_text, title="分析报告", subtitle="深度研究报告",
                meta_line="", author="数字生命卡兹克"):
     """将 Markdown 转为带封面的 HTML"""
 
@@ -221,7 +221,7 @@ def md_to_html(md_text, title="横纵分析报告", subtitle="横纵分析法深
         html_body = html_body.replace(first_h1_match.group(0), '', 1)
 
     # 替换 CSS 中的页眉占位符
-    css = CSS_TEMPLATE.replace("HEADER_TEXT", f"{title}  |  横纵分析法深度研究报告")
+    css = CSS_TEMPLATE.replace("HEADER_TEXT", f"{title}  |  深度研究报告")
 
     # 构建封面
     cover_html = f"""
@@ -250,7 +250,7 @@ def md_to_html(md_text, title="横纵分析报告", subtitle="横纵分析法深
 
 
 def main():
-    parser = argparse.ArgumentParser(description="横纵分析法报告 Markdown → PDF")
+    parser = argparse.ArgumentParser(description="Markdown → PDF")
     parser.add_argument("input", help="输入的 Markdown 文件路径")
     parser.add_argument("output", help="输出的 PDF 文件路径")
     parser.add_argument("--title", default=None, help="报告标题")
