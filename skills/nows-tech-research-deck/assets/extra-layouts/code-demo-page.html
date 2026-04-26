@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<!--
+  Extra Layout · Code Demo Page
+  用于渲染 Act 4 的代码示例页（开发 / 测试 / 发布 / 调度 / 进阶）。
+  与 guizang-ppt-skill 共用 CSS 变量。
+  使用方式：
+    - DEMO_STAGE: 开发 | 测试 | 发布 | 调度 | 进阶
+    - CODE_LANG:  sql | python | yaml | bash | ts | go ...
+    - CODE_BODY:  代码块内容（已 HTML-escape）
+    - KEY_POINTS: 1-3 条关键点
+-->
+<section class="slide layout-code-demo" data-layout="code-demo-page">
+  <header class="slide-meta">
+    <span class="stage-tag">{{DEMO_STAGE}}</span>
+    <span class="page-num">{{PAGE_NUM}}</span>
+  </header>
+
+  <h2 class="slide-title">{{TITLE}}</h2>
+  <p class="slide-lede">{{LEDE}}</p>
+
+  <div class="code-body">
+    <div class="code-wrap">
+      <span class="lang-tag">{{CODE_LANG}}</span>
+      <pre class="code-block"><code class="lang-{{CODE_LANG}}">{{CODE_BODY}}</code></pre>
+    </div>
+
+    <aside class="key-points">
+      <h3>关键点</h3>
+      <ol>
+        <!-- 1-3 条 li -->
+        {{KEY_POINTS}}
+      </ol>
+    </aside>
+  </div>
+
+  <footer class="slide-footer">
+    <span class="output-label">输出</span>
+    <pre class="output-block">{{OUTPUT}}</pre>
+  </footer>
+</section>
+
+<style>
+  .layout-code-demo {
+    display: grid;
+    grid-template-rows: auto auto auto 1fr auto;
+    gap: 0.9rem;
+    padding: 3rem 4rem;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--font-sans);
+  }
+  .layout-code-demo .slide-meta {
+    display: flex;
+    justify-content: space-between;
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    color: var(--muted);
+  }
+  .layout-code-demo .stage-tag {
+    color: var(--accent);
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    font-weight: 700;
+  }
+  .layout-code-demo .slide-title {
+    font-family: var(--font-serif);
+    font-size: 2.1rem;
+    margin: 0;
+    line-height: 1.15;
+  }
+  .layout-code-demo .slide-lede {
+    font-size: 0.95rem;
+    color: var(--muted);
+    margin: 0;
+  }
+  .layout-code-demo .code-body {
+    display: grid;
+    grid-template-columns: 2fr 1fr;
+    gap: 1.5rem;
+    min-height: 0;
+  }
+  .layout-code-demo .code-wrap {
+    position: relative;
+    background: var(--ink);
+    color: var(--paper);
+    border-radius: 4px;
+    overflow: hidden;
+  }
+  .layout-code-demo .lang-tag {
+    position: absolute;
+    top: 0.5rem;
+    right: 0.8rem;
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    opacity: 0.55;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+  .layout-code-demo .code-block {
+    margin: 0;
+    padding: 1.2rem 1.4rem;
+    font-family: var(--font-mono);
+    font-size: 0.88rem;
+    line-height: 1.55;
+    overflow-x: auto;
+    white-space: pre;
+  }
+  .layout-code-demo .code-block code {
+    font-family: inherit;
+  }
+  .layout-code-demo .key-points h3 {
+    font-family: var(--font-mono);
+    font-size: 0.78rem;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin: 0 0 0.7rem;
+  }
+  .layout-code-demo .key-points ol {
+    padding-left: 1.2rem;
+    margin: 0;
+    font-size: 0.9rem;
+    line-height: 1.55;
+  }
+  .layout-code-demo .key-points li { margin-bottom: 0.6rem; }
+  .layout-code-demo .slide-footer {
+    border-top: 1px solid var(--muted);
+    padding-top: 0.6rem;
+  }
+  .layout-code-demo .output-label {
+    display: inline-block;
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 0.3rem;
+  }
+  .layout-code-demo .output-block {
+    font-family: var(--font-mono);
+    font-size: 0.82rem;
+    color: var(--ink);
+    background: transparent;
+    border-left: 3px solid var(--accent);
+    padding: 0.5rem 0.9rem;
+    margin: 0;
+    overflow-x: auto;
+    white-space: pre;
+    max-height: 5rem;
+  }
+</style>

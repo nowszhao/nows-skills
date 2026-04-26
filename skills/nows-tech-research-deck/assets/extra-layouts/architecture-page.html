@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<!--
+  Extra Layout · Architecture Page
+  用于渲染 Act 2 的核心架构 ASCII 图。
+  与 guizang-ppt-skill 共用 CSS 变量 (--ink, --paper, --accent, --font-mono...).
+  使用方式：
+    1. render_deck.py 会读取 research.md 中的 ```<ascii>...``` 代码块
+    2. 将代码块内容插入到 <pre class="ascii-diagram"> 里
+    3. 将模块说明（最多 4 条）插入到 <ul class="module-notes"> 里
+-->
+<section class="slide layout-architecture" data-layout="architecture-page">
+  <header class="slide-meta">
+    <span class="act-tag">{{ACT}}</span>
+    <span class="page-num">{{PAGE_NUM}}</span>
+  </header>
+
+  <h2 class="slide-title">{{TITLE}}</h2>
+  <p class="slide-subtitle">{{SUBTITLE}}</p>
+
+  <div class="architecture-body">
+    <pre class="ascii-diagram">{{ASCII_DIAGRAM}}</pre>
+
+    <aside class="module-notes">
+      <h3>模块说明</h3>
+      <ul>
+        <!-- render_deck.py 注入 li 项，最多 4 条 -->
+        {{MODULE_NOTES}}
+      </ul>
+    </aside>
+  </div>
+
+  <footer class="slide-footer">
+    <span class="source">{{SOURCE_LINK}}</span>
+  </footer>
+</section>
+
+<style>
+  /* 仅本 layout 专用样式，全部走 guizang CSS 变量 */
+  .layout-architecture {
+    display: grid;
+    grid-template-rows: auto auto 1fr auto;
+    gap: 1.2rem;
+    padding: 3rem 4rem;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--font-sans);
+  }
+  .layout-architecture .slide-meta {
+    display: flex;
+    justify-content: space-between;
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    color: var(--muted);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+  .layout-architecture .slide-title {
+    font-family: var(--font-serif);
+    font-size: 2.4rem;
+    line-height: 1.15;
+    margin: 0;
+  }
+  .layout-architecture .slide-subtitle {
+    font-size: 1rem;
+    color: var(--muted);
+    margin: 0.3rem 0 0;
+  }
+  .layout-architecture .architecture-body {
+    display: grid;
+    grid-template-columns: 1.6fr 1fr;
+    gap: 2rem;
+    align-items: start;
+    min-height: 0;
+  }
+  .layout-architecture .ascii-diagram {
+    font-family: var(--font-mono);
+    font-size: 0.95rem;
+    line-height: 1.35;
+    color: var(--ink);
+    background: transparent;
+    border-left: 3px solid var(--accent);
+    padding: 1rem 1.2rem;
+    overflow-x: auto;
+    white-space: pre;
+    margin: 0;
+  }
+  .layout-architecture .module-notes {
+    font-size: 0.92rem;
+    line-height: 1.5;
+  }
+  .layout-architecture .module-notes h3 {
+    font-family: var(--font-mono);
+    font-size: 0.8rem;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin: 0 0 0.8rem;
+  }
+  .layout-architecture .module-notes ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+  }
+  .layout-architecture .module-notes li {
+    padding: 0.6rem 0;
+    border-top: 1px solid var(--muted);
+  }
+  .layout-architecture .module-notes li:first-child { border-top: none; }
+  .layout-architecture .module-notes li strong {
+    display: block;
+    font-family: var(--font-serif);
+    color: var(--accent);
+    margin-bottom: 0.2rem;
+  }
+  .layout-architecture .slide-footer {
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    color: var(--muted);
+  }
+</style>
