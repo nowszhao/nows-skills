@@ -5,12 +5,12 @@ render_deck.py · Phase B 渲染脚本
 流程：
   1. 读取 Phase A 产出的 research.md
   2. 解析成 section 树
-  3. 按 engine-routing.md 的规则，决定每个 section 走 guizang 原生 layout
+  3. 按 engine-routing.md 的规则，决定每个 section 走本 skill 内建基础 layout
      还是本 skill 的 extra layout
-  4. 生成一个 render-plan.json（Agent 再据此用 guizang 的 template.html 填充）
+  4. 生成一个 render-plan.json（Agent 再据此用 assets/base-template.html 填充）
 
-**本脚本不直接写出最终 HTML** —— 因为 guizang 的填充需要 Agent 结合
-assets/template.html 做上下文感知的文字排版。本脚本只负责"拆 + 路由"，
+**本脚本不直接写出最终 HTML** —— 因为最终填充需要 Agent 结合
+assets/base-template.html 做上下文感知的文字排版。本脚本只负责"拆 + 路由"，
 把计划交给 Agent 执行。
 
 用法：
@@ -30,7 +30,7 @@ import sys
 
 
 # ──────────────────────────────────────────────────────────────────
-# 1. 主题色 → guizang 主题 key 映射
+# 1. 主题色 → 内建 deck 主题 key 映射
 # ──────────────────────────────────────────────────────────────────
 THEME_MAP = {
     "墨水经典": "ink-classic",
@@ -166,7 +166,7 @@ def build_plan(sections: list[dict], theme: str) -> dict:
         {
             "type": "cover",
             "layout": "cover",
-            "engine": "guizang",
+            "engine": "base",
             "title": (product_m.group(1).strip() if product_m else "Untitled"),
             "subtitle": (tagline_m.group(1).strip().splitlines()[0] if tagline_m else ""),
         }
@@ -181,7 +181,7 @@ def build_plan(sections: list[dict], theme: str) -> dict:
         page = {
             "type": ptype,
             "layout": ptype,
-            "engine": "extra" if ptype.endswith("-page") else "guizang",
+            "engine": "extra" if ptype.endswith("-page") else "base",
             "title": s["heading"],
             "body_excerpt": s["body"][:200],
             "body_full": s["body"],
@@ -193,7 +193,7 @@ def build_plan(sections: list[dict], theme: str) -> dict:
         {
             "type": "cover",
             "layout": "cover-end",
-            "engine": "guizang",
+            "engine": "base",
             "title": "Thanks",
             "subtitle": "Q&A / Discussion",
         }
@@ -205,9 +205,9 @@ def build_plan(sections: list[dict], theme: str) -> dict:
         "total_pages": len(pages),
         "pages": pages,
         "notes": [
-            "engine=guizang 的页面交由 Agent 使用 guizang-ppt-skill/assets/template.html 填充",
+            "engine=base 的页面交由 Agent 使用 assets/base-template.html 填充",
             "engine=extra 的页面使用本 skill assets/extra-layouts/ 下对应 HTML 模板",
-            "所有扩展 layout 与 guizang 共用 CSS 变量 (--ink, --paper, --accent ...)",
+            "所有扩展 layout 与基础模板共用 CSS 变量 (--ink, --paper, --accent ...)",
         ],
     }
 

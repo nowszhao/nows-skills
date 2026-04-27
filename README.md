@@ -29,11 +29,7 @@ cp -R skills/nows-tech-research-deck ~/.workbuddy/skills/
 pip install weasyprint markdown --break-system-packages
 ```
 
-- `nows-tech-research-deck`：需要先安装 `guizang-ppt-skill`：
-
-```bash
-npx skills add https://github.com/op7418/guizang-ppt-skill --skill guizang-ppt-skill
-```
+- `nows-tech-research-deck`：渲染能力已内置，无需再额外安装 PPT skill。
 
 ## 技能使用说明
 

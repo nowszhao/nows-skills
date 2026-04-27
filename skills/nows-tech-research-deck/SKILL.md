@@ -4,21 +4,20 @@ description: >
   Deep-researches any technical product (framework, tool, platform, language,
   or protocol) and produces a 4-act technical deck covering background,
   architecture, competitive landscape, and end-to-end usage demo. Renders to a
-  single-file magazine-style HTML deck via guizang-ppt-skill by default, with
-  three technical-oriented extra layouts (architecture, code-demo, comparison-
-  table) for pages guizang does not handle well. Use when the user asks to
-  research, investigate, survey, or deep-dive a technical product and wants a
-  PPT, slides, deck, 幻灯片, or 演示稿 as output. Typical triggers include
-  "帮我调研 X 并生成 PPT", "深度调研 X", "X 技术分享 ppt", "给我一份 X 的
-  技术调研 slides", "research X and make a deck", "investigate X framework
-  presentation", "X 产品分析 PPT", "X 架构介绍 演示稿".
+  single-file magazine-style HTML deck with built-in base layouts and three
+  technical-oriented extra layouts (architecture, code-demo, comparison-table).
+  Use when the user asks to research, investigate, survey, or deep-dive a
+  technical product and wants a PPT, slides, deck, 幻灯片, or 演示稿 as output.
+  Typical triggers include "帮我调研 X 并生成 PPT", "深度调研 X", "X 技术分享
+  ppt", "给我一份 X 的 技术调研 slides", "research X and make a deck",
+  "investigate X framework presentation", "X 产品分析 PPT", "X 架构介绍 演示稿".
 ---
 
 # tech-research-deck
 
 把"调研一个技术产品 + 出一份技术 PPT"这件事做成两阶段流水线：
 **Phase A 调研**产出结构化 `research.md`（纯内容），
-**Phase B 渲染**把 `research.md` 喂给 guizang-ppt-skill 加扩展 layout，出单文件 HTML deck。
+**Phase B 渲染**把 `research.md` 交给本 skill 内建的 deck 引擎（基础 layout + 技术扩展 layout），输出单文件 HTML deck。
 
 调研和排版解耦，每阶段单独可复用、可调试。
 
@@ -26,11 +25,7 @@ description: >
 
 ## 0. 依赖前置
 
-- **必需**：`guizang-ppt-skill` 已安装到 `~/.claude/skills/` 或 `~/.workbuddy/skills/`。
-  未安装时先引导用户安装：
-  ```
-  npx skills add https://github.com/op7418/guizang-ppt-skill --skill guizang-ppt-skill
-  ```
+- **渲染零额外安装**：基础 layout、主题色 token、扩展 layout 都已经包含在当前 skill 目录中，不需要再额外安装其他 PPT skill。
 - **可选**：`web-access` skill（用于联网调研）。无此 skill 时降级为 `web_search` + `web_fetch`。
 
 ---
@@ -111,21 +106,21 @@ Act 4  DO   — 怎么用起来（开发→测试→发布→调度）
 
 | 页面类型 | 引擎 / Layout |
 |---|---|
-| 封面、章节幕封、大字报数字页、引用页 | guizang 原生 layout |
-| 左文右图、图片网格、图文混排 | guizang 原生 layout |
+| 封面、章节幕封、大字报数字页、引用页 | 本 skill 内建基础 layout（`cover` / `chapter` / `big-stat` / `quote`） |
+| 左文右图、图片网格、图文混排 | 本 skill 内建基础 layout（`text-image` / `image-grid` / `magazine-mix` / `before-after` / `question`） |
 | **架构图页**（含 ASCII 图） | `assets/extra-layouts/architecture-page.html` |
 | **代码 demo 页**（长代码块） | `assets/extra-layouts/code-demo-page.html` |
 | **竞品对比表页** | `assets/extra-layouts/comparison-table-page.html` |
 
-扩展 layout 与 guizang 共用 CSS 变量（`--ink`、`--paper`、`--accent`...），视觉一致。
+扩展 layout 与基础 layout 共用同一套 CSS 变量（`--ink`、`--paper`、`--accent`...），视觉一致。
 
-### Step B2 · 调 guizang 生成基础 HTML
+### Step B2 · 生成基础 HTML 骨架
 
-复制 `guizang-ppt-skill/assets/template.html` 到工作目录，按 Q6 切主题色，按 guizang 的 6 步流程填充原生 layout 页。
+使用 `assets/base-template.html` 作为单文件 HTML deck 骨架，按 Q6 切主题色，并把基础 layout 页填充到模板的 `{{SLIDES}}` 槽位。
 
 ### Step B3 · 注入扩展 layout 页
 
-用 `scripts/render_deck.py` 把架构图页、代码 demo 页、竞品对比表页插入到对应位置。插入规则：
+用 `scripts/render_deck.py` 先生成 `render-plan.json`，再按 plan 把架构图页、代码 demo 页、竞品对比表页插入到对应位置。插入规则：
 
 - **架构图页**：放在 Act 2 HOW 的第二页（在"核心概念"之后）
 - **竞品对比表页**：放在 Act 3 VS 的第一页
@@ -133,7 +128,7 @@ Act 4  DO   — 怎么用起来（开发→测试→发布→调度）
 
 ### Step B4 · 渲染后自检（P0，必过）
 
-对照 `guizang-ppt-skill/references/checklist.md` 跑一遍，额外补 3 条技术向自检：
+对照 `references/render-checklist.md` 跑一遍，额外补 3 条技术向自检：
 
 - [ ] 架构图页能通过浏览器 zoom 150% 清晰阅读（代码字体 ≥14px）
 - [ ] 代码块有明确语言标签，长代码有横向滚动而非换行截断

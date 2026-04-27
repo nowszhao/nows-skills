@@ -2,7 +2,7 @@
 <!--
   Extra Layout · Architecture Page
   用于渲染 Act 2 的核心架构 ASCII 图。
-  与 guizang-ppt-skill 共用 CSS 变量 (--ink, --paper, --accent, --font-mono...).
+  与本 skill 的内建 deck 模板共用 CSS 变量 (--ink, --paper, --accent, --font-mono...).
   使用方式：
     1. render_deck.py 会读取 research.md 中的 ```<ascii>...``` 代码块
     2. 将代码块内容插入到 <pre class="ascii-diagram"> 里
@@ -35,7 +35,7 @@
 </section>
 
 <style>
-  /* 仅本 layout 专用样式，全部走 guizang CSS 变量 */
+  /* 仅本 layout 专用样式，全部走基础模板 CSS 变量 */
   .layout-architecture {
     display: grid;
     grid-template-rows: auto auto 1fr auto;

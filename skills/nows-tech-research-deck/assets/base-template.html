@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="{{THEME_KEY}}">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{{DECK_TITLE}}</title>
+  <style>
+    :root,
+    :root[data-theme="indigo-porcelain"] {
+      --paper: #f6f1e8;
+      --ink: #182230;
+      --accent: #355c8c;
+      --muted: #6e7781;
+      --line: rgba(24, 34, 48, 0.14);
+      --surface: rgba(255, 255, 255, 0.55);
+      --font-serif: "Iowan Old Style", "Palatino Linotype", "Noto Serif SC", serif;
+      --font-sans: Inter, "Helvetica Neue", "PingFang SC", "Noto Sans SC", sans-serif;
+      --font-mono: "SFMono-Regular", "JetBrains Mono", "Menlo", monospace;
+    }
+
+    :root[data-theme="ink-classic"] {
+      --paper: #f7f4ee;
+      --ink: #151515;
+      --accent: #1f4f8f;
+      --muted: #6c6c6c;
+      --line: rgba(21, 21, 21, 0.14);
+      --surface: rgba(255, 255, 255, 0.58);
+    }
+
+    :root[data-theme="forest-ink"] {
+      --paper: #edf2ea;
+      --ink: #183028;
+      --accent: #2f6f5a;
+      --muted: #64756e;
+      --line: rgba(24, 48, 40, 0.14);
+      --surface: rgba(255, 255, 255, 0.52);
+    }
+
+    :root[data-theme="kraft"] {
+      --paper: #f3eadc;
+      --ink: #3a2b22;
+      --accent: #9a5b2c;
+      --muted: #7d6f61;
+      --line: rgba(58, 43, 34, 0.14);
+      --surface: rgba(255, 248, 241, 0.5);
+    }
+
+    :root[data-theme="dune"] {
+      --paper: #f5efe6;
+      --ink: #2d312f;
+      --accent: #8e6c4d;
+      --muted: #72716e;
+      --line: rgba(45, 49, 47, 0.14);
+      --surface: rgba(255, 255, 255, 0.5);
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      background: #111;
+      color: var(--ink);
+      font-family: var(--font-sans);
+    }
+
+    body {
+      min-height: 100vh;
+      padding: 32px;
+    }
+
+    .deck {
+      display: grid;
+      gap: 32px;
+      justify-content: center;
+    }
+
+    .slide {
+      width: min(1440px, calc(100vw - 64px));
+      min-height: calc(min(1440px, calc(100vw - 64px)) * 9 / 16);
+      padding: 56px 64px;
+      background:
+        radial-gradient(circle at top right, rgba(255,255,255,0.35), transparent 22%),
+        linear-gradient(180deg, rgba(255,255,255,0.06), transparent 24%),
+        var(--paper);
+      color: var(--ink);
+      border-radius: 24px;
+      box-shadow: 0 24px 80px rgba(0, 0, 0, 0.22);
+      position: relative;
+      overflow: hidden;
+      page-break-after: always;
+    }
+
+    .slide::after {
+      content: "";
+      position: absolute;
+      inset: 24px;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      pointer-events: none;
+    }
+
+    .eyebrow,
+    .meta,
+    .kicker {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    .title {
+      margin: 0;
+      font-family: var(--font-serif);
+      font-size: clamp(40px, 4vw, 64px);
+      line-height: 1.02;
+      letter-spacing: -0.03em;
+    }
+
+    .subtitle,
+    .lede {
+      margin: 0;
+      max-width: 48rem;
+      color: var(--muted);
+      font-size: clamp(18px, 1.6vw, 24px);
+      line-height: 1.55;
+    }
+
+    .layout-cover,
+    .layout-cover-end,
+    .layout-chapter,
+    .layout-question {
+      display: grid;
+      align-content: space-between;
+      gap: 24px;
+    }
+
+    .layout-cover .hero,
+    .layout-cover-end .hero,
+    .layout-chapter .hero,
+    .layout-question .hero {
+      display: grid;
+      gap: 18px;
+      max-width: 900px;
+      align-self: center;
+    }
+
+    .layout-cover .hero,
+    .layout-cover-end .hero {
+      padding-top: 64px;
+    }
+
+    .layout-big-stat {
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+      gap: 24px;
+    }
+
+    .layout-big-stat .stat {
+      align-self: center;
+      font-family: var(--font-serif);
+      font-size: clamp(96px, 12vw, 176px);
+      line-height: 0.9;
+      color: var(--accent);
+      letter-spacing: -0.05em;
+    }
+
+    .layout-quote {
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+      gap: 28px;
+    }
+
+    .layout-quote blockquote {
+      margin: 0;
+      align-self: center;
+      font-family: var(--font-serif);
+      font-size: clamp(34px, 3.2vw, 52px);
+      line-height: 1.28;
+      max-width: 1100px;
+    }
+
+    .layout-text-image,
+    .layout-before-after,
+    .layout-magazine-mix {
+      display: grid;
+      grid-template-columns: 1.2fr 0.9fr;
+      gap: 32px;
+      align-items: stretch;
+    }
+
+    .layout-before-after {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .copy,
+    .panel,
+    .media,
+    .card {
+      position: relative;
+      z-index: 1;
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: 24px 28px;
+      backdrop-filter: blur(8px);
+    }
+
+    .copy {
+      display: grid;
+      gap: 16px;
+      align-content: start;
+    }
+
+    .copy ul,
+    .copy ol,
+    .panel ul,
+    .panel ol {
+      margin: 0;
+      padding-left: 1.1rem;
+      line-height: 1.7;
+    }
+
+    .layout-image-grid {
+      display: grid;
+      grid-template-rows: auto auto 1fr;
+      gap: 24px;
+    }
+
+    .layout-image-grid .grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 20px;
+    }
+
+    .layout-image-grid .media,
+    .layout-text-image .media,
+    .layout-magazine-mix .media,
+    .layout-before-after .panel {
+      min-height: 280px;
+    }
+
+    .layout-question .question {
+      font-family: var(--font-serif);
+      font-size: clamp(44px, 4.5vw, 72px);
+      line-height: 1.08;
+      letter-spacing: -0.04em;
+      max-width: 980px;
+    }
+
+    .footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 16px;
+      color: var(--muted);
+      font-size: 14px;
+      font-family: var(--font-mono);
+    }
+
+    @media print {
+      body {
+        background: #fff;
+        padding: 0;
+      }
+
+      .deck {
+        gap: 0;
+      }
+
+      .slide {
+        width: 100vw;
+        min-height: 56.25vw;
+        border-radius: 0;
+        box-shadow: none;
+      }
+    }
+  </style>
+</head>
+<body>
+  <!--
+    内建基础模板。
+    Agent 需要把 pages 渲染成下列 layout class 之一后塞入 {{SLIDES}}：
+    cover / cover-end / chapter / big-stat / quote / text-image /
+    image-grid / magazine-mix / before-after / question。
+  -->
+  <main class="deck">
+    {{SLIDES}}
+  </main>
+</body>
+</html>

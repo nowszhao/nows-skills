@@ -26,10 +26,9 @@ Phase B  Render    ──►  <product>-deck.html     （单文件 HTML PPT）
 ```bash
 # 本 skill 已放在
 ~/.workbuddy/skills/tech-research-deck/
-
-# 依赖：guizang-ppt-skill 必须先装好
-npx skills add https://github.com/op7418/guizang-ppt-skill --skill guizang-ppt-skill
 ```
+
+渲染相关能力已经内置在当前 skill 目录中，**不需要**再额外安装其他 PPT skill。
 
 ## 目录结构
 
@@ -43,10 +42,12 @@ tech-research-deck/
 │   ├── research-sources.md          # 三源交叉检索清单 + 信源分级
 │   ├── competitor-matrix.md         # 竞品 6 维度打分矩阵模板
 │   ├── ascii-diagrams.md            # ASCII 架构图规范（禁 Mermaid）+ 5 种范式
-│   └── engine-routing.md            # 页面类型 → 引擎 layout 路由表
+│   ├── engine-routing.md            # 页面类型 → 引擎 layout 路由表
+│   └── render-checklist.md          # Phase B 渲染验收清单
 ├── assets/
 │   ├── research-template.md         # Phase A 产物骨架（Markdown）
-│   └── extra-layouts/               # 技术向扩展 layout，与 guizang 共用 CSS 变量
+│   ├── base-template.html           # 内建单文件 HTML deck 骨架
+│   └── extra-layouts/               # 技术向扩展 layout，与内建基础 layout 共用 CSS 变量
 │       ├── architecture-page.html
 │       ├── code-demo-page.html
 │       └── comparison-table-page.html
@@ -88,10 +89,10 @@ python3 scripts/render_deck.py \
   --outplan ./workdir/dbt-render-plan.json
 ```
 
-`render_deck.py` 只产出计划（JSON + 页面清单），不直接写 HTML——HTML 的最终填充由 Agent 结合 `guizang-ppt-skill/assets/template.html` 完成，因为文字排版需要上下文感知。
+`render_deck.py` 只产出计划（JSON + 页面清单），不直接写 HTML——HTML 的最终填充由 Agent 结合 `assets/base-template.html` 完成，因为文字排版需要上下文感知。
 
 ## 维护
 
 - 每次遇到 2 次以上尝试才解决的问题 → 追加到 `LESSONS.md`
-- 触发率不理想时 → 在 SKILL.md 的 `description` 里加同义触发词
+- 触发率不理想时 → 在 `SKILL.md` 的 `description` 里加同义触发词
 - 扩展 layout 不够用 → 加新文件到 `assets/extra-layouts/`，同步更新 `engine-routing.md`

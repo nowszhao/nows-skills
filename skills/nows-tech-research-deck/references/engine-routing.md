@@ -1,6 +1,6 @@
 # Engine Routing · 页面类型 → 引擎 Layout 路由表
 
-Phase B 渲染的核心规则：根据页面内容类型，选择**原生 guizang layout** 或 **本 skill 的 extra layout**。
+Phase B 渲染的核心规则：根据页面内容类型，选择**本 skill 内建基础 layout** 或 **本 skill 的 extra layout**。
 
 ---
 
@@ -8,15 +8,15 @@ Phase B 渲染的核心规则：根据页面内容类型，选择**原生 guizan
 
 | 页面类型 | 典型内容 | 引擎 | 对应 Layout |
 |---|---|---|---|
-| 封面 | 产品名 + 副标题 + 日期 | guizang | `cover` |
-| 章节幕封 | "Act 1 WHY"、"Act 2 HOW" | guizang | `chapter` |
-| 大字报数字页 | "100x faster"、"2016 年诞生" | guizang | `big-stat` |
-| 引用页 | 作者原话、用户证言 | guizang | `quote` |
-| 左文右图 | 痛点举例 + 插图 | guizang | `text-image` |
-| 图片网格 | 多截图并排 | guizang | `image-grid` |
-| 图文混排 | Act 1 的叙事页 | guizang | `magazine-mix` |
-| Before/After 对比 | 用和不用的对比 | guizang | `before-after` |
-| 悬念问题 | "为什么 Airflow 不够？" | guizang | `question` |
+| 封面 | 产品名 + 副标题 + 日期 | base | `cover` |
+| 章节幕封 | "Act 1 WHY"、"Act 2 HOW" | base | `chapter` |
+| 大字报数字页 | "100x faster"、"2016 年诞生" | base | `big-stat` |
+| 引用页 | 作者原话、用户证言 | base | `quote` |
+| 左文右图 | 痛点举例 + 插图 | base | `text-image` |
+| 图片网格 | 多截图并排 | base | `image-grid` |
+| 图文混排 | Act 1 的叙事页 | base | `magazine-mix` |
+| Before/After 对比 | 用和不用的对比 | base | `before-after` |
+| 悬念问题 | "为什么 Airflow 不够？" | base | `question` |
 | **架构图页** | ASCII 架构图 + 模块说明 | **extra** | `architecture-page.html` |
 | **代码 demo 页** | 长代码 + 输出 | **extra** | `code-demo-page.html` |
 | **竞品对比表页** | 6 维度矩阵表 | **extra** | `comparison-table-page.html` |
@@ -80,7 +80,7 @@ deep 40+ 页：每个 Act 2 的概念、每个 Act 4 的环节各拆一页，加
 
 ## 主题色与 extra layout 的配合
 
-extra layout 全部使用 guizang 的 CSS 变量：
+extra layout 全部使用本 skill 基础模板的 CSS 变量：
 
 ```css
 :root {
