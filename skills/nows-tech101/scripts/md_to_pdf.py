@@ -201,7 +201,7 @@ a {
 """
 
 
-def md_to_html(md_text, title="分析报告", subtitle="深度研究报告",
+def md_to_html(md_text, title="傻瓜教程", subtitle="",
                meta_line="", author=""):
     """将 Markdown 转为带封面的 HTML"""
 
@@ -216,12 +216,12 @@ def md_to_html(md_text, title="分析报告", subtitle="深度研究报告",
     first_h1_match = re.search(r'<h1>(.*?)</h1>', html_body)
     if first_h1_match:
         extracted_title = first_h1_match.group(1)
-        if not title or title == "横纵分析报告":
+        if not title or title == "傻瓜教程":
             title = extracted_title
         html_body = html_body.replace(first_h1_match.group(0), '', 1)
 
     # 替换 CSS 中的页眉占位符
-    css = CSS_TEMPLATE.replace("HEADER_TEXT", f"{title}  |  深度研究报告")
+    css = CSS_TEMPLATE.replace("HEADER_TEXT", f"{title}  |  ")
 
     # 构建封面
     cover_html = f"""
@@ -268,7 +268,7 @@ def main():
             meta_line = stripped
             break
 
-    html = md_to_html(md_text, title=args.title or "横纵分析报告", meta_line=meta_line, author=args.author)
+    html = md_to_html(md_text, title=args.title or "傻瓜教程", meta_line=meta_line, author=args.author)
 
     # 保存中间 HTML（便于调试）
     html_path = args.output.replace('.pdf', '.html')

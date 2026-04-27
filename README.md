@@ -1,128 +1,48 @@
 # nows-skills
 
-一个用于沉淀 **Nows 自定义 Skills** 的仓库。
+一个用来存放 **Nows 自定义 Skills** 的仓库。
 
-这个仓库的目标很直接：把那些高频、可复用、能稳定产出结果的 Prompt / Skill 工作流整理成结构化资产，方便持续迭代、复用和分享。当前仓库还很轻，但已经有一个完整可用的示例 Skill：`nows-tech101`。
+## 安装
 
-## 仓库里有什么
+先拉取仓库：
 
-目前仓库主要收录面向内容生产与知识整理的 Skill。每个 Skill 会尽量保持下面几类内容：
-
-- **核心说明**：`SKILL.md`，定义 Skill 的定位、触发方式、工作流程和交付标准
-- **辅助脚本**：放在 `scripts/`，用于把 Skill 的结果进一步加工成可交付产物
-- **参考资料**：放在 `references/`，用于沉淀写作规范、样式参考或补充资料
-- **资源文件**：放在 `assets/`，用于存放图片、模板或其它静态素材
-
-## 当前已包含的 Skill
-
-### `nows-tech101`
-
-一个「**技术傻瓜教程生成器**」Skill。
-
-它适合这样的场景：
-
-- 你碰到一个新技术名词，但不想只看一句话解释
-- 你想快速搞懂某个框架、协议、工具或语言特性
-- 你希望直接拿到一份 **从概念到原理，再到最小可跑示例** 的完整 101 教程
-
-这个 Skill 的目标不是给你一段百科定义，而是生成一份真正能读、能抄、能上手的 Markdown 教程。按照 `SKILL.md` 的要求，一份合格的输出通常会覆盖：
-
-- **一句话定义**：这东西到底是什么
-- **背景与动机**：它为什么会出现
-- **核心概念**：有哪些必须先认识的术语
-- **技术架构**：核心组件如何协作
-- **技术原理**：为什么它能 work
-- **使用示例**：从环境准备到 Hello World，再到一个更真实的例子
-- **下一步学习路径**：应该继续看什么
-
-## 目录结构
-
-```text
-nows-skills/
-├── README.md
-└── skills/
-    └── nows-tech101/
-        ├── SKILL.md
-        ├── assets/
-        ├── references/
-        └── scripts/
-            └── md_to_pdf.py
+```bash
+git clone https://github.com/changhozhao/nows-skills.git
+cd nows-skills
 ```
 
-## 怎么使用
+把需要的 skill 目录复制到你的本地 skills 目录里，例如：
 
-### 1. 阅读 Skill 定义
+```bash
+mkdir -p ~/.workbuddy/skills
+cp -R skills/nows-tech101 ~/.workbuddy/skills/
+cp -R skills/nows-tech-research-deck ~/.workbuddy/skills/
+```
 
-先看目标 Skill 的 `SKILL.md`。这是最重要的入口，里面会写清楚：
+如果你使用的是 `~/.claude/skills/`，把目标目录替换一下就行。
 
-- 这个 Skill 解决什么问题
-- 什么时候应该触发
-- 输出应该长什么样
-- 执行时需要遵守哪些步骤和质量标准
+### 额外依赖
 
-如果你是把这个仓库作为个人 Skill 集合来维护，`SKILL.md` 基本就是该 Skill 的「产品说明书 + SOP」。
-
-### 2. 用自然语言触发
-
-以 `nows-tech101` 为例，下面这类需求都很适合：
-
-- `帮我写一份 Redis 的 101 教程`
-- `我想快速入门 gRPC，给我整一份 Tech101`
-- `React 到底是什么，帮我从零讲明白`
-- `给我一篇关于 Kafka 的可上手教程`
-
-### 3. 获取输出
-
-`nows-tech101` 默认产出是 **Markdown 教程**。如果宿主环境支持文件落地，通常会生成类似下面的文件：
-
-- `[技术名]_Tech101.md`
-
-如果你明确需要 PDF，这个 Skill 还带了一个转换脚本，可把 Markdown 进一步转成排版好的 PDF。
-
-## Markdown 转 PDF
-
-仓库内置脚本：`skills/nows-tech101/scripts/md_to_pdf.py`
-
-用途：把生成好的 Markdown 教程转换成更适合分享、打印或归档的 PDF 文档。
-
-依赖安装：
+- `nows-tech101`：如果需要把 Markdown 转成 PDF，再安装：
 
 ```bash
 pip install weasyprint markdown --break-system-packages
 ```
 
-示例命令：
+- `nows-tech-research-deck`：需要先安装 `guizang-ppt-skill`：
 
 ```bash
-python skills/nows-tech101/scripts/md_to_pdf.py input.md output.pdf --title "Redis Tech101" --author "Tech101"
+npx skills add https://github.com/op7418/guizang-ppt-skill --skill guizang-ppt-skill
 ```
 
-这个脚本适合在你已经确认 Markdown 内容没问题之后再使用。
+## 技能使用说明
 
-## 这个仓库适合谁
+| 技能 | 是干啥的 | 适合什么时候用 | 默认产出 | 你可以怎么说 |
+|---|---|---|---|---|
+| `nows-tech101` | 生成某个技术的入门教程 | 想快速了解一个框架、协议、工具、语言特性时 | Markdown 教程 | `帮我写一份 Redis 的 101 教程`<br>`我想快速入门 gRPC，给我整一份 Tech101`<br>`React 是什么，帮我从零讲清楚` |
+| `nows-tech-research-deck` | 调研一个技术产品，并生成演示稿 | 要做技术分享、内部汇报、竞品对比时 | `<product>-research.md` 和 `<product>-deck.html` | `帮我调研 dbt 并生成 PPT`<br>`深度调研 Dagster，做一份技术分享 slides`<br>`research Snowflake and make a deck` |
 
-- **想沉淀个人 Prompt / Skill 资产的人**
-- **经常需要写技术教程、研究笔记、知识卡片的人**
-- **希望把一次性 Prompt 打磨成稳定工作流的人**
-- **想把 AI 输出从“能看”提升到“能交付”的人**
 
-## 维护原则
+## 建议
 
-这个仓库更看重的是 **可复用性** 和 **可持续迭代**，所以每个 Skill 最好都尽量做到：
-
-- **边界清晰**：知道自己解决什么问题，不解决什么问题
-- **触发明确**：用户说什么样的话时应该命中
-- **过程稳定**：面对相似需求时能输出相似质量的结果
-- **交付具体**：不是泛泛而谈，而是能落到 Markdown、PDF、代码或其它可交付物上
-- **方便扩展**：脚本、参考资料、静态资源都能随着 Skill 一起演进
-
-## 后续计划
-
-当前仓库还处在一个很早期的阶段，后面可以逐步补充更多类型的 Skills，比如：
-
-- 面向技术研究的深度分析类 Skill
-- 面向代码阅读的源码导读类 Skill
-- 面向写作产出的报告生成类 Skill
-- 面向知识整理的结构化笔记类 Skill
-
-如果你也在整理自己的 Skill 体系，这个仓库可以作为一个很轻的起点：先把一个真的有用的 Skill 做扎实，再慢慢扩成一个可复用的能力集合。
+第一次使用时，先看对应目录下的 `SKILL.md`，再直接用自然语言触发就够了。
