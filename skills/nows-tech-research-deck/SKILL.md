@@ -1,5 +1,5 @@
 ---
-name: tech-research-deck
+name: nows-tech-research-deck
 description: >
   Deep-researches any technical product (framework, tool, platform, language,
   or protocol) and produces a 4-act technical deck covering background,
