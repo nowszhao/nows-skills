@@ -22,6 +22,8 @@ cp -R skills/nows-llm-wiki ~/.workbuddy/skills/
 cp -R skills/nows-iplus-reading ~/.workbuddy/skills/
 cp -R skills/nows-content-distill ~/.workbuddy/skills/
 cp -R skills/nows-article-anlyze ~/.workbuddy/skills/
+cp -R skills/nows-prd-create ~/.workbuddy/skills/
+cp -R skills/nows-prd-iterate ~/.workbuddy/skills/
 ```
 
 如果你使用的是 `~/.claude/skills/`，把目标目录替换一下就行。
@@ -55,6 +57,8 @@ pip install youtube-transcript-api yt-dlp trafilatura readability-lxml
 | `nows-iplus-reading` | 基于克拉申 i+1 假设，通过逻辑推理式问答定位认知边界，推荐"刚好能吸收的下一步"精读路径（精确到小节） | 想精读一本书但不知从哪读起、想跳过已懂部分、想系统入门某个领域时 | 诊断结论 + 小节级 i+1 精读 / 略读 / 暂不学习清单 | `帮我精读《思考，快与慢》`<br>`我想搞懂行为经济学，从哪开始`<br>`帮我设计 i+1 阅读路径` |
 | `nows-content-distill` | 把一篇文章/一个 YouTube 视频压成"刻进脑子的心理表征"——核心概念、金字塔行文逻辑、差异化亮点、金句锚点、≤500 字最简复述 | 看完一篇/一个视频，想沉淀成自己能复述、能联想、能调用的内化卡片时 | `<slug>-distill.md` 与单文件 `<slug>-distill.html`（笔记风、零依赖、深色模式、打印友好） | `帮我把这篇文章 distill 一下：<URL>`<br>`刻印一下这个 YouTube 视频`<br>`压一下这篇，我想留下心理表征` |
 | `nows-article-anlyze` | 把深度文章 / 行业研报 / 产品发布 Keynote 拆成「概念库 + 金字塔 + 可点击流程图 + 原文映射」的可交互单文件 HTML，发布会类还附战略动因卡片、竞争定位矩阵、行业趋势预测 | 想结构化解析一篇长文 / 报告 / 发布会实录，做成可视化、可溯源、可离线分享的工作台时 | 单文件 HTML（深蓝商务质感、零依赖、流程图节点跳转原文锚点） | `帮我把这篇研报拆解成可视化 HTML`<br>`把这场 Keynote 解构成战略 + 竞争分析`<br>`把这篇商业文章做成可点击溯源的卡片` |
+| `nows-prd-create` | 把模糊的产品想法澄清成结构化、可追溯的 PRD：先分诊（是否该写 PRD），再分批问关键信息，最后输出用户故事自带验收标准、需求双向追溯的标准 PRD 或 One-Pager | 有一个产品特性想写文档、但想法还没完全清晰，或需要把脑子里的需求落成正式 spec 时 | 标准 PRD（中等特性 2-5 个故事）或 One-Pager（小特性 1 个故事） | `帮我写一份 PRD`<br>`我有个特性想法，帮我梳理一下`<br>`澄清一下这个需求，写成 product spec` |
+| `nows-prd-iterate` | 面向**私有化 ToB 技术产品**的存量系统迭代：先读你提供的现有系统知识库（Markdown + 截图），再分析新需求的影响面（涉及哪些页面 / 角色 / 流程），最后输出与现状对齐的 PRD + 单文件 HTML 交互原型（含"现状截图 vs 迭代后线框"对比） | 已有线上系统、要在其上加新功能 / 改老功能、且需要 PRD + 原型同时交付给研发对接时 | 迭代型 PRD（含影响面清单 / 字段规约 / 状态机 / 权限矩阵 / 私有化部署专项）+ 单文件 HTML 原型（侧边栏分组 / 前后对比 / mermaid 流程图） | `我有个 ToB 系统要加批量导出功能，KB 在 ./kb`<br>`基于现有系统帮我写迭代 PRD 和原型`<br>`私有化产品新增 X 功能` |
 
 
 ## 建议

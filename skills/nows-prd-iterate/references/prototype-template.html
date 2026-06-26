@@ -1,0 +1,434 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>{FEATURE_NAME} · 迭代原型</title>
+<!--
+  填充指南（生成时整体替换 {{...}} 占位符）：
+  - {FEATURE_NAME}：特性名
+  - {VERSION}：版本号
+  - {DATE}：日期
+  - {AUTHOR}：作者
+  - 侧边栏分组：在 .sidebar 内填三组 li（new / modified / linked）
+  - 主区域：每个 page 一个 <section class="page-view" data-page-id="...">，含左现状右迭代后
+  - 流程图：<section class="flow-view"> 内放 <pre class="mermaid">…</pre>
+  - 数据规约：<section class="data-view"> 内放字段表 / 状态机 / 权限矩阵
+-->
+<style>
+:root {
+  --bg: #0f1419;
+  --bg-elev: #161b22;
+  --bg-elev2: #1f2630;
+  --border: #2a313c;
+  --text: #d6deeb;
+  --text-mute: #8b97a8;
+  --text-dim: #5c6878;
+  --accent: #4f9ef8;
+  --new: #3fb950;
+  --modify: #d29922;
+  --link: #6e7681;
+  --danger: #f85149;
+  --code-bg: #0d1117;
+  --shadow: 0 2px 8px rgba(0,0,0,.4);
+}
+[data-theme="light"] {
+  --bg: #f6f8fa;
+  --bg-elev: #ffffff;
+  --bg-elev2: #f0f3f6;
+  --border: #d0d7de;
+  --text: #1f2328;
+  --text-mute: #59636e;
+  --text-dim: #818b98;
+  --accent: #0969da;
+  --new: #1a7f37;
+  --modify: #9a6700;
+  --link: #57606a;
+  --danger: #cf222e;
+  --code-bg: #f6f8fa;
+  --shadow: 0 1px 3px rgba(0,0,0,.08);
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; height: 100%; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.55;
+}
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+code { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, monospace; background: var(--code-bg); padding: 1px 5px; border-radius: 3px; font-size: 12.5px; }
+hr { border: none; border-top: 1px solid var(--border); margin: 16px 0; }
+
+/* ===== Layout ===== */
+.app { display: grid; grid-template-columns: 280px 1fr; height: 100vh; }
+.sidebar {
+  background: var(--bg-elev);
+  border-right: 1px solid var(--border);
+  overflow-y: auto;
+  padding: 16px;
+}
+.main { overflow-y: auto; padding: 24px 32px; }
+
+/* ===== Header in sidebar ===== */
+.brand { font-weight: 600; font-size: 15px; margin-bottom: 4px; }
+.brand .feature { color: var(--accent); }
+.meta { font-size: 12px; color: var(--text-dim); margin-bottom: 16px; }
+
+/* ===== Nav tabs (top-level views) ===== */
+.tabs { display: flex; gap: 4px; margin-bottom: 16px; border-bottom: 1px solid var(--border); }
+.tab {
+  padding: 6px 10px; cursor: pointer; font-size: 13px;
+  color: var(--text-mute); border-bottom: 2px solid transparent; margin-bottom: -1px;
+}
+.tab.active { color: var(--text); border-bottom-color: var(--accent); }
+
+/* ===== Sidebar groups ===== */
+.group { margin-bottom: 18px; }
+.group-title { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--text-dim); margin-bottom: 6px; }
+.page-list { list-style: none; padding: 0; margin: 0; }
+.page-list li { margin: 0; }
+.page-link {
+  display: flex; align-items: center; gap: 6px;
+  padding: 5px 8px; border-radius: 4px; cursor: pointer;
+  font-size: 13px; color: var(--text-mute);
+}
+.page-link:hover { background: var(--bg-elev2); color: var(--text); }
+.page-link.active { background: var(--bg-elev2); color: var(--text); }
+.tag { font-size: 10px; padding: 1px 5px; border-radius: 3px; font-weight: 600; }
+.tag.new { background: rgba(63,185,80,.15); color: var(--new); }
+.tag.modify { background: rgba(210,153,34,.15); color: var(--modify); }
+.tag.link { background: rgba(110,118,129,.2); color: var(--link); }
+
+/* ===== Main views ===== */
+.view { display: none; }
+.view.active { display: block; }
+.view-title { font-size: 20px; font-weight: 600; margin: 0 0 4px; }
+.view-sub { color: var(--text-mute); margin-bottom: 18px; font-size: 13px; }
+
+/* ===== Page compare ===== */
+.page-view { display: none; }
+.page-view.active { display: block; }
+.page-header {
+  display: flex; align-items: center; gap: 10px; margin-bottom: 16px;
+  padding-bottom: 12px; border-bottom: 1px solid var(--border);
+}
+.page-header h2 { margin: 0; font-size: 18px; }
+.page-id-chip { font-family: ui-monospace, monospace; background: var(--bg-elev2); padding: 2px 8px; border-radius: 4px; font-size: 12px; color: var(--text-mute); }
+
+.compare {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px;
+}
+.compare-col { background: var(--bg-elev); border: 1px solid var(--border); border-radius: 6px; padding: 12px; }
+.compare-col h3 { margin: 0 0 10px; font-size: 13px; color: var(--text-mute); font-weight: 600; text-transform: uppercase; letter-spacing: .03em; }
+.compare-col.before h3::before { content: "◀ "; color: var(--text-dim); }
+.compare-col.after h3::before { content: "▶ "; color: var(--new); }
+.compare-col img { max-width: 100%; border: 1px solid var(--border); border-radius: 4px; display: block; }
+.compare-col .empty-shot { padding: 40px 16px; text-align: center; color: var(--text-dim); font-size: 12px; background: var(--bg-elev2); border-radius: 4px; }
+
+/* ===== Wireframe primitives ===== */
+.wire {
+  font-family: ui-monospace, monospace; font-size: 12px;
+  background: var(--bg-elev2); border-radius: 4px; padding: 10px;
+}
+.wire-row { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border: 1px dashed var(--border); border-radius: 3px; margin-bottom: 6px; }
+.wire-btn { padding: 4px 10px; background: var(--accent); color: white; border-radius: 3px; font-size: 12px; }
+.wire-btn.ghost { background: transparent; border: 1px solid var(--border); color: var(--text); }
+.wire-input { flex: 1; padding: 4px 8px; background: var(--bg); border: 1px solid var(--border); border-radius: 3px; color: var(--text-mute); }
+.wire-table {
+  width: 100%; border-collapse: collapse; margin-top: 8px;
+  background: var(--bg); border: 1px solid var(--border); border-radius: 3px;
+}
+.wire-table th, .wire-table td { padding: 6px 10px; text-align: left; border-bottom: 1px solid var(--border); font-size: 12px; }
+.wire-table th { background: var(--bg-elev2); color: var(--text-mute); font-weight: 600; }
+.diff-add { outline: 1px dashed var(--new); background: rgba(63,185,80,.08); position: relative; }
+.diff-add::after { content: "NEW"; position: absolute; top: -8px; right: -8px; font-size: 9px; background: var(--new); color: white; padding: 1px 4px; border-radius: 2px; }
+.diff-mod { outline: 1px dashed var(--modify); background: rgba(210,153,34,.08); position: relative; }
+.diff-mod::after { content: "MOD"; position: absolute; top: -8px; right: -8px; font-size: 9px; background: var(--modify); color: white; padding: 1px 4px; border-radius: 2px; }
+
+/* ===== Change list ===== */
+.change-list { background: var(--bg-elev); border: 1px solid var(--border); border-radius: 6px; padding: 14px; }
+.change-list h3 { margin: 0 0 10px; font-size: 13px; color: var(--text-mute); text-transform: uppercase; letter-spacing: .03em; }
+.change-item { padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
+.change-item:last-child { border-bottom: none; }
+.change-item .badge { font-size: 10px; padding: 1px 6px; border-radius: 3px; margin-right: 8px; font-weight: 600; vertical-align: middle; }
+.badge.add { background: rgba(63,185,80,.15); color: var(--new); }
+.badge.mod { background: rgba(210,153,34,.15); color: var(--modify); }
+.badge.del { background: rgba(248,81,73,.15); color: var(--danger); }
+
+/* ===== Data view tables ===== */
+.data-table { width: 100%; border-collapse: collapse; background: var(--bg-elev); border: 1px solid var(--border); border-radius: 6px; overflow: hidden; margin-bottom: 20px; }
+.data-table th, .data-table td { padding: 8px 12px; text-align: left; border-bottom: 1px solid var(--border); font-size: 13px; vertical-align: top; }
+.data-table th { background: var(--bg-elev2); color: var(--text-mute); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: .03em; }
+.data-table tr:last-child td { border-bottom: none; }
+
+/* ===== Theme toggle ===== */
+.theme-toggle { position: fixed; top: 12px; right: 16px; cursor: pointer; padding: 4px 10px; border: 1px solid var(--border); border-radius: 4px; background: var(--bg-elev); font-size: 12px; color: var(--text-mute); }
+.theme-toggle:hover { color: var(--text); }
+</style>
+</head>
+<body>
+
+<div class="app">
+
+  <!-- ============ SIDEBAR ============ -->
+  <aside class="sidebar">
+    <div class="brand"><span class="feature">{FEATURE_NAME}</span></div>
+    <div class="meta">v{VERSION} · {DATE} · {AUTHOR}</div>
+
+    <div class="tabs">
+      <div class="tab active" data-view="pages">页面</div>
+      <div class="tab" data-view="flow">流程</div>
+      <div class="tab" data-view="data">数据规约</div>
+      <div class="tab" data-view="impact">影响面</div>
+    </div>
+
+    <div class="group">
+      <div class="group-title">🆕 新增页面</div>
+      <ul class="page-list">
+        <!-- 示例：<li><a class="page-link" data-page="page-id-new-1"><span class="tag new">NEW</span> 页面标题</a></li> -->
+        <li><a class="page-link" data-page="example-new-page"><span class="tag new">NEW</span> 示例新增页</a></li>
+      </ul>
+    </div>
+
+    <div class="group">
+      <div class="group-title">✏️ 修改页面</div>
+      <ul class="page-list">
+        <li><a class="page-link active" data-page="example-modified-page"><span class="tag modify">MOD</span> 示例修改页</a></li>
+      </ul>
+    </div>
+
+    <div class="group">
+      <div class="group-title">🔗 联动页面</div>
+      <ul class="page-list">
+        <li><a class="page-link" data-page="example-linked-page"><span class="tag link">LINK</span> 示例联动页</a></li>
+      </ul>
+    </div>
+  </aside>
+
+  <!-- ============ MAIN ============ -->
+  <main class="main">
+    <div class="theme-toggle" onclick="toggleTheme()">切换主题</div>
+
+    <!-- ====== View: Pages ====== -->
+    <div class="view active" data-view="pages">
+
+      <!-- ====== Example: Modified page ====== -->
+      <section class="page-view active" data-page-id="example-modified-page">
+        <div class="page-header">
+          <h2>示例修改页</h2>
+          <span class="page-id-chip">page_id = example-modified-page</span>
+          <span class="tag modify">MOD</span>
+        </div>
+
+        <div class="compare">
+          <div class="compare-col before">
+            <h3>现状（来自 KB 截图）</h3>
+            <!-- 替换为真实截图路径：<img src="kb-path/screenshots/overview.png" /> -->
+            <div class="empty-shot">[在此插入 KB 截图：&lt;kb-path&gt;/screenshots/overview.png]</div>
+          </div>
+          <div class="compare-col after">
+            <h3>迭代后（线框）</h3>
+            <div class="wire">
+              <div class="wire-row">
+                <div class="wire-input">搜索框</div>
+                <div class="wire-btn ghost">类型筛选</div>
+                <div class="wire-btn diff-add">批量导出</div>
+                <div class="wire-btn">新建</div>
+              </div>
+              <table class="wire-table">
+                <thead>
+                  <tr>
+                    <th class="diff-add">☐</th>
+                    <th>名称</th><th>类型</th><th>状态</th><th>操作</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr><td>☐</td><td>users</td><td>TABLE</td><td>已发布</td><td>查看 / 编辑</td></tr>
+                  <tr><td>☐</td><td>orders</td><td>VIEW</td><td>草稿</td><td>查看 / 编辑</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <div class="change-list">
+          <h3>变更清单（对应 PRD §5 功能需求）</h3>
+          <div class="change-item"><span class="badge add">新增</span> 顶部操作区：「批量导出」按钮（R-1，可见角色：Admin / Owner）</div>
+          <div class="change-item"><span class="badge add">新增</span> 表格首列：多选 checkbox（R-2）</div>
+          <div class="change-item"><span class="badge mod">修改</span> 表格行点击：保持跳转详情，多选不影响跳转</div>
+        </div>
+      </section>
+
+      <!-- ====== Example: New page ====== -->
+      <section class="page-view" data-page-id="example-new-page">
+        <div class="page-header">
+          <h2>示例新增页</h2>
+          <span class="page-id-chip">page_id = example-new-page</span>
+          <span class="tag new">NEW</span>
+        </div>
+        <div class="compare">
+          <div class="compare-col before">
+            <h3>现状</h3>
+            <div class="empty-shot">本页为全新页面，无现状对照</div>
+          </div>
+          <div class="compare-col after">
+            <h3>迭代后（线框）</h3>
+            <div class="wire">
+              <div class="wire-row">
+                <strong>批量导出</strong>
+              </div>
+              <div class="wire-row">
+                <span>导出范围：</span>
+                <span><input type="radio" checked /> 仅选中</span>
+                <span><input type="radio" /> 全部</span>
+              </div>
+              <div class="wire-row">
+                <span>字段选择：</span>
+                <span><input type="checkbox" checked /> 名称</span>
+                <span><input type="checkbox" checked /> 类型</span>
+                <span><input type="checkbox" /> 创建人</span>
+              </div>
+              <div class="wire-row" style="justify-content:flex-end;">
+                <div class="wire-btn ghost">取消</div>
+                <div class="wire-btn">提交导出任务</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="change-list">
+          <h3>变更清单</h3>
+          <div class="change-item"><span class="badge add">新增</span> 新页面，从「数据集列表」批量导出按钮触发（R-2）</div>
+        </div>
+      </section>
+
+      <!-- ====== Example: Linked page ====== -->
+      <section class="page-view" data-page-id="example-linked-page">
+        <div class="page-header">
+          <h2>示例联动页</h2>
+          <span class="page-id-chip">page_id = example-linked-page</span>
+          <span class="tag link">LINK</span>
+        </div>
+        <div class="change-list">
+          <h3>联动说明（无 UI 变化）</h3>
+          <div class="change-item">本页 UI 不变，但导出任务会出现在此页的任务列表中</div>
+        </div>
+      </section>
+
+    </div>
+
+    <!-- ====== View: Flow ====== -->
+    <div class="view" data-view="flow">
+      <h1 class="view-title">端到端流程</h1>
+      <p class="view-sub">点击节点可跳转到对应页面（如已配置 data-page）</p>
+      <pre class="mermaid">
+flowchart LR
+  A[用户进入 数据集列表] --> B{选中要导出的项}
+  B -->|至少 1 项| C[点击 批量导出]
+  C --> D[弹出 批量导出页]
+  D --> E[选择字段范围]
+  E --> F[提交导出任务]
+  F --> G[任务进入 任务列表]
+  G --> H{完成?}
+  H -->|成功| I[下载文件链接]
+  H -->|失败| J[错误提示+重试]
+      </pre>
+      <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+      <script>mermaid.initialize({startOnLoad: true, theme: 'dark'});</script>
+    </div>
+
+    <!-- ====== View: Data Spec ====== -->
+    <div class="view" data-view="data">
+      <h1 class="view-title">数据规约</h1>
+
+      <h3>表单字段规约：批量导出表单</h3>
+      <table class="data-table">
+        <thead><tr><th>字段</th><th>必填</th><th>默认值</th><th>校验</th><th>错误文案</th></tr></thead>
+        <tbody>
+          <tr><td>导出范围</td><td>✅</td><td>仅选中</td><td>二选一</td><td>—</td></tr>
+          <tr><td>字段选择</td><td>✅</td><td>全部勾选</td><td>至少 1 个</td><td>"至少选择 1 个字段"</td></tr>
+        </tbody>
+      </table>
+
+      <h3>状态机变更：Dataset</h3>
+      <table class="data-table">
+        <thead><tr><th>从</th><th>到</th><th>触发</th><th>备注</th></tr></thead>
+        <tbody>
+          <tr><td>已发布</td><td>导出中</td><td>提交导出任务</td><td>新增状态</td></tr>
+          <tr><td>导出中</td><td>已发布</td><td>任务完成（成功/失败）</td><td>自动回归</td></tr>
+        </tbody>
+      </table>
+
+      <h3>权限矩阵变更</h3>
+      <table class="data-table">
+        <thead><tr><th>操作</th><th>Owner</th><th>Admin</th><th>Viewer</th></tr></thead>
+        <tbody>
+          <tr><td>批量导出（新增）</td><td>✅</td><td>✅</td><td>❌</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- ====== View: Impact ====== -->
+    <div class="view" data-view="impact">
+      <h1 class="view-title">影响面总览</h1>
+      <p class="view-sub">本次迭代涉及的所有变更项一览（与 PRD §3 一致）</p>
+
+      <h3>页面影响</h3>
+      <table class="data-table">
+        <thead><tr><th>类型</th><th>page_id</th><th>变更摘要</th></tr></thead>
+        <tbody>
+          <tr><td><span class="tag new">NEW</span></td><td><code>example-new-page</code></td><td>全新批量导出表单页</td></tr>
+          <tr><td><span class="tag modify">MOD</span></td><td><code>example-modified-page</code></td><td>新增批量导出按钮 + 多选</td></tr>
+          <tr><td><span class="tag link">LINK</span></td><td><code>example-linked-page</code></td><td>导出任务进入此处展示，无 UI 变化</td></tr>
+        </tbody>
+      </table>
+
+      <h3>私有化部署影响</h3>
+      <table class="data-table">
+        <thead><tr><th>维度</th><th>是否影响</th><th>说明</th></tr></thead>
+        <tbody>
+          <tr><td>多租户</td><td>是</td><td>租户隔离，不影响其他租户</td></tr>
+          <tr><td>升级兼容</td><td>否</td><td>老数据无变更，状态自动适配</td></tr>
+          <tr><td>部署配置</td><td>否</td><td>无新增配置项</td></tr>
+          <tr><td>离线约束</td><td>否</td><td>无公网依赖</td></tr>
+          <tr><td>审计合规</td><td>是</td><td>导出操作需写审计日志（操作人 + 字段范围 + 数据量）</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+  </main>
+</div>
+
+<script>
+// ===== Top tabs =====
+document.querySelectorAll('.tab').forEach(t => {
+  t.addEventListener('click', () => {
+    const view = t.dataset.view;
+    document.querySelectorAll('.tab').forEach(x => x.classList.toggle('active', x === t));
+    document.querySelectorAll('.view').forEach(v => v.classList.toggle('active', v.dataset.view === view));
+  });
+});
+
+// ===== Page links (in Pages view) =====
+document.querySelectorAll('.page-link').forEach(a => {
+  a.addEventListener('click', () => {
+    const id = a.dataset.page;
+    // switch to Pages view
+    document.querySelectorAll('.tab').forEach(x => x.classList.toggle('active', x.dataset.view === 'pages'));
+    document.querySelectorAll('.view').forEach(v => v.classList.toggle('active', v.dataset.view === 'pages'));
+    document.querySelectorAll('.page-link').forEach(x => x.classList.toggle('active', x === a));
+    document.querySelectorAll('.page-view').forEach(p => p.classList.toggle('active', p.dataset.pageId === id));
+  });
+});
+
+// ===== Theme toggle =====
+function toggleTheme() {
+  const cur = document.documentElement.dataset.theme;
+  document.documentElement.dataset.theme = cur === 'dark' ? 'light' : 'dark';
+}
+</script>
+
+</body>
+</html>
