@@ -27,34 +27,7 @@ cp -R skills/nows-podcast-publish ~/.workbuddy/skills/
 
 如果你使用的是 `~/.claude/skills/`，把目标目录替换一下就行。
 
-### 额外依赖
 
-- `nows-tech101`：如果需要把 Markdown 转成 PDF，再安装：
-
-```bash
-pip install weasyprint markdown --break-system-packages
-```
-
-- `nows-tech-research-deck`：渲染能力已内置，无需再额外安装 PPT skill。
-
-- `nows-content-distill`：可选装抓取依赖：
-
-```bash
-pip install youtube-transcript-api yt-dlp trafilatura readability-lxml
-```
-
-不装也能跑（文章走 r.jina.ai 兜底；YouTube 抓不到时会直接停下来让用户提供转录）。
-
-- `nows-podcast-publish`：需要安装以下工具：
-
-```bash
-# bmx CLI（音频处理）
-pip install git+https://github.com/nowszhao/BiliMix.git#subdirectory=sdk
-
-# agent-browser（浏览器自动化）
-npm install -g agent-browser
-agent-browser install
-```
 
 ## 技能使用说明
 
