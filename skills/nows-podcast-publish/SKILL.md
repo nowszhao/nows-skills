@@ -11,22 +11,30 @@ description: 将音频一键发布到小宇宙播客平台。覆盖全流程：�
 
 ### bmx CLI
 
-bmx 是 BiliMix 的命令行工具，用于下载和处理音频。安装方式：
+bmx 是 BiliMix 的命令行工具，用于下载和处理音频。
 
 ```bash
-# 从 GitHub 安装
 pip install git+https://github.com/nowszhao/BiliMix.git#subdirectory=sdk
 ```
 
-安装后验证：`bmx --help`
+验证：`bmx --help`
 
-### agent-browser
+### playwright-cli
 
-用于浏览器自动化操作小宇宙后台。安装方式：
+**小宇宙发布阶段使用 playwright-cli，不使用 agent-browser。** agent-browser 的 `upload` 命令对小宇宙 React 页面完全无效。
 
 ```bash
-npm install -g agent-browser
-agent-browser install
+npm install -g @playwright/cli@latest
+```
+
+验证：`playwright-cli --version`
+
+### qrcode（Python）
+
+当小宇宙登录页 canvas QR 码在 headless 下渲染不完整时，用 Python 重新生成。
+
+```bash
+pip install qrcode
 ```
 
 ---
@@ -37,41 +45,16 @@ agent-browser install
 
 ### 0.1 收集用户凭证
 
-通过 `AskUserQuestion` 向用户收集三个配置项：
-
-| 配置项 | 说明 | 示例 |
-|--------|------|------|
-| Server | BiliMix 服务地址 | `http://localhost:5000` |
-| Username | 登录用户名 | `admin` |
-| Password | 登录密码 | `***` |
-
-用 `AskUserQuestion` 一次收集全部三项，问题示例：
-
-**header**: "bmx 配置"
-**question**: "请提供 BiliMix 服务的连接信息"
-**options**: 三个 text 输入字段（server / username / password）
-或分两次询问：先问 server，再问账号密码。
+通过 `AskUserQuestion` 收集三个配置项：Server、Username、Password。
 
 ### 0.2 配置并登录
 
-收集到凭证后，依次执行：
-
 ```bash
-# 1. 配置服务地址
 bmx config set server <server_url>
-
-# 2. 登录认证
 bmx auth login --username <username> --password <password>
 ```
 
-验证登录状态：
-
-```bash
-bmx auth status
-# 输出应包含 "logged_in": true
-```
-
-若登录失败（退出码 2），提示用户检查 server 是否可访问、用户名密码是否正确，然后重新收集。
+验证：`bmx auth status`，输出应包含 `"authenticated": true`。
 
 ### 0.3 确认初始化成功
 
@@ -81,172 +64,138 @@ bmx auth status
 
 ## Phase 1: 选择已处理完成的音频
 
-bmx 登录成功后，列出已完成处理的任务，让用户手动选择要发布的一条。
-
 ### 1.1 列出已完成任务
 
 ```bash
 bmx task list
 ```
 
-输出为 JSON 数组，每个任务包含 `task_id`、`title`、`status`、`created_at` 等字段。
-
-筛选条件：
-- `status` 为 `completed` 或 `done`
-- 按 `created_at` 倒序排列（最新的在前）
-- 取前 10 条
+筛选条件：`status` 为 `completed`，按 `created_at` 倒序，取前 10 条。
 
 ### 1.2 展示任务列表让用户选择
 
-将筛选后的任务列表以清晰格式展示给用户。每个任务显示：
-
 ```
-[序号] {title 或 文件名}
+[序号] {title}
        任务ID: {task_id}
        完成时间: {created_at}
 ```
 
-然后使用 `AskUserQuestion` 让用户选择：
+用 `AskUserQuestion` 让用户选择。
 
-**header**: "选择音频"
-**question**: "请选择要发布到小宇宙的任务（序号）"
-**options**: 每个已完成任务作为一个选项，label 为标题摘要 + 任务 ID
+### 1.3 确认音频版本并下载
 
-### 1.3 下载选中的音频
+**先询问用户要下载哪个版本：**
 
-用户选择后，下载原始音频和获取字幕：
-
-```bash
-# 下载原始音频（发布用小宇宙用原始版）
-bmx audio download --task-id <selected_task_id> --type original -o <basename>_original.mp3
-
-# 获取字幕文本（用于后续内容生成）
-bmx task result <selected_task_id> --field transcription
-```
-
-同时获取任务元信息：
+- `original` — 原始音频
+- `mixed` — 翻译混音版（大多数用户要这个）
 
 ```bash
-bmx task result <selected_task_id> --field title
-bmx task result <selected_task_id> --field source_url
+bmx audio download --task-id <task_id> --type <original|mixed> -o <basename>_<type>.mp3
 ```
 
-### 1.4 确认音频文件
+### 1.4 获取任务元信息
 
-向用户展示下载结果：
-- 音频文件路径和大小
-- 提取到的标题/文件名
-- 字幕文本行数
+```bash
+# 获取完整结果（包含 segments 字幕数组）
+bmx task result <task_id>
+```
 
-等待用户确认后进入 Phase 2。
+从返回 JSON 中提取：
+- `result.title` — 音频标题
+- `result.basename` — 文件名
+- `segments` — 字幕段数组，每段含 `start`/`end`/`text`/`speaker`
+- `result.original_duration` / `result.mixed_duration` — 时长
+
+用 Python 将 segments 提取为带时间戳的全文，保存到 `transcript_full.txt`。
+
+> **注意**：`--field transcription` 字段可能返回 `null`，应从 `segments` 数组自行拼装。
+
+### 1.5 确认音频文件
+
+向用户展示：文件路径、大小（需 ≤200MB）、时长、字幕段数。确认后进入 Phase 2。
 
 ---
 
 ## Phase 2: YouTube 溯源
 
-从任务元信息或音频文件名提取搜索关键词，搜索 YouTube 原始视频获取视频链接、发布时间和封面图片。
-
-**⚠️ 禁止用 agent-browser 访问 YouTube**，YouTube 对自动化浏览器有严格反机器人检测。全部用 `web_search` + YouTube 缩略图 API 完成。
+**⚠️ 禁止用浏览器访问 YouTube。** 全部用 WebSearch + YouTube 缩略图 API。
 
 ### 2.1 提取搜索关键词
 
 优先级：
 1. bmx 任务中的 `source_url`（若为 YouTube 链接则直接使用）
-2. 从音频文件名提取：去除扩展名和 bmx 后缀（`_mixed` / `_original`），取播客名 + 关键词
+2. 从音频文件名提取：去除扩展名和 bmx 后缀，取播客名 + 年份 + 标题关键词
 
 ### 2.2 搜索 YouTube
 
+**搜索策略（关键）：极简命中，不加引号、不加人名。**
+
 ```bash
-web_search "site:youtube.com {搜索关键词}"
+WebSearch "site:youtube.com {频道/会议名} {年份} {标题关键词}"
 ```
 
-从搜索结果中提取视频链接（`https://www.youtube.com/watch?v=VIDEO_ID`）、发布时间和标题。
+示例：
+- ✅ `site:youtube.com Snowflake Summit 2026 Platform Keynote`
+- ❌ `site:youtube.com "Snowflake Summit 2026" "Platform Keynote" Benoit Dageville`（引号+人名导致无结果）
+
+若 WebSearch 返回结果不含 YouTube 链接，直接请求用户提供 Google 搜索结果或手动提供链接。
 
 ### 2.3 下载封面图片
 
-从 URL 提取 11 位 `VIDEO_ID`，通过 YouTube 公开缩略图 API 下载（无需访问页面，零拦截）：
+从 YouTube URL 提取 11 位 `VIDEO_ID`：
 
 ```bash
-# 逐级尝试分辨率，取第一个 > 200px 的图像
 for size in maxresdefault hqdefault sddefault; do
   curl -s -o /tmp/cover_temp.jpg -L "https://img.youtube.com/vi/{VIDEO_ID}/${size}.jpg"
   python3 -c "from PIL import Image; im=Image.open('/tmp/cover_temp.jpg'); exit(0 if min(im.size)>200 else 1)" && break
 done
 ```
 
-裁剪为 1:1 正方形封面（1400×1400）：
+裁剪为 1400×1400 正方形：
 
 ```python
 from PIL import Image
 img = Image.open("/tmp/cover_temp.jpg")
 w, h = img.size
-size = min(w, h)
-left = (w - size) // 2
-top = (h - size) // 2
-img_cropped = img.crop((left, top, left + size, top + size))
-img_cropped = img_cropped.resize((1400, 1400), Image.LANCZOS)
-img_cropped.save("{basename}_cover.png")
+s = min(w, h)
+img = img.crop(((w-s)//2, (h-s)//2, (w+s)//2, (h+s)//2))
+img = img.resize((1400, 1400), Image.LANCZOS)
+img.save("{basename}_cover.png")
 ```
 
 ### 2.4 降级方案 — 文字封面
 
-当所有缩略图分辨率均 < 200px 时（极端情况），用 Pillow 生成深色文字封面：
-
-```python
-from PIL import Image, ImageDraw
-img = Image.new('RGB', (1400, 1400), (20, 22, 28))
-d = ImageDraw.Draw(img)
-d.rectangle([50, 50, 1350, 1350], outline=(80, 85, 95), width=3)
-title_words = "{视频标题}".split()
-lines, cur = [], ""
-for w in title_words:
-    if len(cur + w) < 25: cur += w + " "
-    else: lines.append(cur.strip()); cur = w + " "
-lines.append(cur.strip())
-y = 550
-for line in lines[:3]:
-    d.text((700, y), line, fill=(240, 240, 245), anchor="mm")
-    y += 80
-d.text((700, 850), "YouTube · {发布时间}", fill=(140, 145, 155), anchor="mm")
-img.save("{basename}_cover.png")
-```
+当所有缩略图均 < 200px 时，用 Pillow 生成深色文字封面（具体代码见旧版，保持不变）。
 
 ### 2.5 确认溯源结果
 
-向用户展示：YouTube 视频链接、发布时间、封面图片路径。用户确认后进入 Phase 3。若搜索不到，请用户手动提供链接。
+展示 YouTube 链接、发布时间、封面路径。用户确认后进入 Phase 3。搜索不到则请用户提供链接。
 
 ---
 
 ## Phase 3: 内容生成
 
-生成播客单集所需的全部文本内容。字幕来自 Phase 1 获取的 transcription。
+生成播客单集所需全部文本。字幕来自 Phase 1 的 segments。
 
 ### 3.1 标题翻译与格式化
-
-将任务标题/文件名翻译为地道中文标题，使用格式：
 
 ```
 {类型标签} | {中文标题}
 ```
 
-类型标签选项：`专访` `峰会` `演讲` `对谈` `圆桌` `讲座` `分享` `对话`
-
-选择最匹配的标签。标题翻译要求：信达雅、吸引点击、不超过 40 字。
+类型标签：`专访` `峰会` `演讲` `对谈` `圆桌` `讲座` `分享` `对话`
 
 ### 3.2 生成单集介绍
 
-加载 `references/content_prompts.md` 中的「单集介绍 Prompt」，将字幕文本替换 `{SUBTITLE_TEXT}` 占位符后，在当前对话中直接生成。
+加载 `references/content_prompts.md` 中的「单集介绍 Prompt」，将字幕文本替换 `{SUBTITLE_TEXT}` 后生成。
 
-输出包含三个部分：
-- **本期核心内容**：3-5 句话概括精华
-- **你将听到**：6-10 个要点列表
-- **适合谁听**：3-5 个标签
+输出三部分：**本期核心内容**（3-5 句）、**你将听到**（6-10 要点）、**适合谁听**（3-5 标签）。
 
 ### 3.3 生成章节导航
 
-加载 `references/content_prompts.md` 中的「章节导航 Prompt」，将字幕文本替换 `{SUBTITLE_TEXT}` 占位符后生成。
+加载 `references/content_prompts.md` 中「章节导航 Prompt」生成。
 
-输出格式严格按照模板：
+格式严格按：
 ```
 00:00  【章节名】简介... 🧡🧡🧡🧡🧡
 ```
@@ -259,124 +208,243 @@ img.save("{basename}_cover.png")
 
 ### 3.5 展示内容预览并确认
 
-将生成的标题和完整内容展示给用户预览，使用 `AskUserQuestion` 确认：
+将标题和完整内容展示给用户预览。用 `AskUserQuestion` 确认。
 
-**header**: "确认内容"
-**question**: "内容是否正确？"
-**options**: 「确认，继续发布」/ 「修改标题」/ 「修改正文」/ 「全部重来」
+### ⚠️ 3.6 内容一致性约束（关键）
 
-用户可选择修改后继续。
+**Phase 4 填入小宇宙的内容，必须与 Phase 3.5 用户确认过的内容逐字一致。** 禁止因打字效率、字符限制等原因临时简写、删改内容。若 `playwright-cli type/fill` 对大段文本有限制，使用 `run-code` + `editor.fill()` 直接注入完整文本。
 
 ---
 
 ## Phase 4: 小宇宙发布
 
-所有浏览器操作使用 `agent-browser` CLI，全程在同一 session 中完成。
+### 概览：双工具协作
 
-### 4.1 打开浏览器并引导用户登录
+| 步骤 | 工具 | 说明 |
+|------|------|------|
+| 4.1-4.2 登录 | agent-browser | 打开登录页、QR 码展示 |
+| 4.3 提取 cookie | agent-browser | 登录后提取 `document.cookie` |
+| 4.4-4.10 操作 | **playwright-cli** | 所有上传和表单操作 |
+
+> **为什么不用 agent-browser 全程操作？** agent-browser 的 `upload` 命令对小宇宙页面无效（返回 `✓ Done` 但文件未附加到 DOM）。playwright-cli 的 `setInputFiles` 可以直接操作 hidden file input。
+
+### 4.1 打开登录页（agent-browser）
 
 ```bash
 agent-browser open https://podcaster.xiaoyuzhoufm.com/
-agent-browser wait --load networkidle
 agent-browser snapshot
 ```
 
-**引导登录流程**（关键步骤）：
+### 4.2 引导用户扫码登录
 
-1. 打开页面后先 `agent-browser snapshot` 判断当前页面状态
-2. 若显示登录页面：
-   - 执行 `agent-browser screenshot` 截图
-   - 将截图展示给用户
-   - 明确提示：**「请用微信扫描屏幕上的二维码完成登录，扫码完成后请告诉我。」**
-3. 等待用户回复「已登录」/「好了」/「完成」等确认后，继续下一步
-4. 执行 `agent-browser snapshot` 验证已进入后台首页
-
-**不要**在用户未确认登录前继续执行任何操作。登录态由 agent-browser session 保持。
-
-### 4.1a 提取播客 ID
-
-登录后进入播客管理后台。小宇宙是 SPA，URL 形如 `/podcast/{24位hex ID}`。若在 dashboard 页面，用 JS 提取：
+1. 若显示登录页，快照找到 `radio "扫码登录"` 并点击切换
+2. QR 码是 `<canvas>` 元素，headless 模式下渲染常不完整（只显示 1/4）
+3. **不要截图 canvas**。改用下面方式提取 QR URL 并重新生成：
 
 ```bash
-agent-browser eval "Array.from(document.querySelectorAll('a')).find(a => a.textContent.includes('科技'))?.href"
-# 返回: https://podcaster.xiaoyuzhoufm.com/podcast/6a27fa4840f10adfcec1a5e1
+# 切换扫码登录后等 5 秒，从 React Fiber 提取 QR URL
+agent-browser eval "
+const canvas = document.querySelector('canvas[class*=\"qr\"]');
+let qrUrl = '';
+let node = canvas;
+for (let i = 0; i < 20; i++) {
+  const key = Object.keys(node).find(k => k.startsWith('__reactFiber'));
+  if (key) {
+    let fiber = node[key];
+    for (let j = 0; j < 30; j++) {
+      if (fiber?.memoizedProps?.value) { qrUrl = fiber.memoizedProps.value; break; }
+      fiber = fiber?.return;
+    }
+    break;
+  }
+  node = node.parentElement;
+  if (!node) break;
+}
+qrUrl
+"
+# 返回: https://h5.xiaoyuzhoufm.com/oauth?qrcode_id=6a43...
 ```
 
-记录 24 位 hex 播客 ID，后续页面 URL 格式为 `/podcast/{pid}/{section}`。
-
-### 4.2 上传音频到资源库
-
-资源库 URL 为 `/podcast/{pid}/library`（非 `/assets`）：
-
-1. 直接导航到资源库：
-```bash
-agent-browser open "https://podcaster.xiaoyuzhoufm.com/podcast/{pid}/library"
-agent-browser wait --load networkidle
-```
-
-2. 找到页面上 `input[type=file][accept="audio/*"]`，使用 `upload` 命令直接上传：
-
-```bash
-agent-browser upload 'input[accept="audio/*"]' <音频文件路径>
-agent-browser wait --load networkidle
-```
-
-3. 上传完成后页面会显示新音频条目，记录其在列表中的位置。
-
-### 4.3 上传封面图片
-
-在资源库中为刚上传的音频关联 Phase 2 生成的正方形封面：
-
-1. 定位到刚上传的音频条目
-2. 点击封面区域，上传 `{basename}_cover.png`
-3. 等待上传完成
-
-### 4.4 创建单集
-
-1. 导航到内容管理 → 创建单集：
-```bash
-agent-browser open "https://podcaster.xiaoyuzhoufm.com/podcast/{pid}/episode"
-agent-browser wait --load networkidle
-agent-browser snapshot -i
-```
-
-2. 点击「创建单集」按钮，进入表单页面。
-
-3. 表单字段及填写方式：
-
-| 字段 | 查找方式 | 操作 |
-|------|---------|------|
-| **标题** | `textbox "输入单集标题"` | `agent-browser type <ref> "{标题}"` |
-| **简介/内容** | `textbox`（紧随标题下方） | `agent-browser type <ref> "{完整内容}"` |
-| **音频** | `input[accept="audio/*"]` | `agent-browser upload 'input[accept="audio/*"]' <文件路径>` |
-| **封面** | `input[accept="image/jpeg,image/png,image/webp"][multiple]` | `agent-browser upload 'input[accept="image/jpeg,image/png,image/webp"][multiple]' <封面路径>` |
-
-**注意**：页面有 2-3 个 `input[type=file]`，需要用 `accept` 属性区分：
-- `audio/*` → 音频
-- `image/jpeg,image/png,image/webp` 且 `multiple=true` → 封面
-
-4. 勾选「阅读并同意」checkbox，点击「创建」按钮发布。
-
-### 4.5 发布单集
-
-点击「发布」或「保存」按钮完成发布。
-
-### 4.6 发布成功截图
-
-**发布完成后必须执行**：
+然后用 Python 生成清晰 QR 码：
 
 ```bash
-agent-browser screenshot
+python3 -c "
+import qrcode
+qr = qrcode.QRCode(version=1, box_size=12, border=4)
+qr.add_data('<qrUrl>')
+qr.make(fit=True)
+img = qr.make_image(fill_color='black', back_color='white')
+img.save('xiaoyuzhou_qr.png')
+"
 ```
 
-截图保存为 `{basename}_publish_success.png`，作为发布成功的凭证展示给用户。
+用 `present_files` 展示 `xiaoyuzhou_qr.png` 给用户扫码。等待用户确认「已登录」。
+
+### 4.3 提取 Cookie 并切换工具
+
+```bash
+# 提取关键 cookies
+agent-browser eval "document.cookie"
+```
+
+需要提取的 cookie：`x-jike-access-token`、`x-jike-refresh-token`、`_c_WBKFRo`、`_jid`
+
+```bash
+# 提取播客 ID
+agent-browser eval "Array.from(document.querySelectorAll('a')).filter(a => a.href?.includes('/podcast/')).map(a => a.href)"
+```
+
+记录 24 位 hex 播客 ID。然后关闭 agent-browser：
+
+```bash
+agent-browser close
+```
+
+### 4.4 启动 playwright-cli 并恢复登录态
+
+```bash
+playwright-cli open
+```
+
+创建 `playwright-cli.json` 配置 stdout 输出：
+
+```json
+{"outputMode": "stdout"}
+```
+
+注入 cookies：
+
+```bash
+playwright-cli run-code "
+async page => {
+  await page.context().addCookies([
+    {name: 'x-jike-access-token', value: '<token>', domain: '.xiaoyuzhoufm.com', path: '/'},
+    {name: 'x-jike-refresh-token', value: '<token>', domain: '.xiaoyuzhoufm.com', path: '/'},
+    {name: '_c_WBKFRo', value: '<value>', domain: '.xiaoyuzhoufm.com', path: '/'},
+    {name: '_jid', value: '<value>', domain: '.xiaoyuzhoufm.com', path: '/'}
+  ]);
+  return 'cookies set';
+}
+"
+```
+
+### 4.5 进入创建单集页面
+
+```bash
+playwright-cli run-code "
+async page => {
+  await page.goto('https://podcaster.xiaoyuzhoufm.com/podcast/{pid}/episode');
+  await page.getByRole('button', { name: '创建单集' }).click();
+  await page.waitForTimeout(3000);
+  return page.url();
+}
+"
+```
+
+### 4.6 填写标题和 Show Notes
+
+```bash
+# 标题
+playwright-cli fill <title_ref> "{标题}"
+
+# Show Notes — 用 run-code 直接注入完整文本（避免 type 截断）
+playwright-cli run-code "
+async page => {
+  const editor = page.getByRole('textbox').nth(1);
+  await editor.click();
+  await editor.fill(\`{Phase 3 确认的完整 Show Notes}\`);
+  return 'done';
+}
+"
+```
+
+### 4.7 上传音频和封面
+
+小宇宙页面有 3 个 `input[type=file]`，全部 hidden。**filechooser 事件不会触发**，直接用 `setInputFiles`：
+
+| 索引 | accept | 用途 |
+|------|--------|------|
+| 0 | `image/jpeg,image/png,image/webp` | 多图封面 |
+| 1 | `audio/*` | 音频 |
+| 2 | `image/jpeg,image/png,image/webp` | 单图封面 |
+
+```bash
+playwright-cli run-code "
+async page => {
+  // 上传音频
+  await page.locator('input[type=file]').nth(1).setInputFiles('<音频绝对路径>');
+  // 上传封面
+  await page.locator('input[type=file]').nth(2).setInputFiles('<封面绝对路径>');
+  await page.waitForTimeout(3000);
+  return 'files uploaded';
+}
+"
+```
+
+> 上传后 `evaluate(el => el.files.length)` 可能返回 0（React 清空），但 UI 会显示文件名即表示成功。
+
+### 4.8 处理裁剪对话框
+
+上传封面后，小宇宙会自动弹出「裁切图片」对话框（封面已是 1400×1400 不需调整）：
+
+```bash
+playwright-cli run-code "
+async page => {
+  await page.getByRole('button', { name: '裁切' }).click({ force: true });
+  await page.waitForTimeout(2000);
+  return 'cropped';
+}
+"
+```
+
+### 4.9 处理遮挡元素
+
+页面常有多层 overlay 遮挡（Modal overlay、portal divs、toast 提示）。需要 force click 关闭：
+
+```bash
+# 关闭 toast
+playwright-cli run-code "
+async page => {
+  const dismissBtns = page.getByRole('button', { name: '稍后再说' });
+  if (await dismissBtns.count() > 0) {
+    await dismissBtns.first().click({ force: true });
+    await page.waitForTimeout(500);
+  }
+  return 'toasts dismissed';
+}
+"
+```
+
+### 4.10 勾选协议并创建
+
+```bash
+playwright-cli run-code "
+async page => {
+  // 勾选「阅读并同意」
+  await page.getByRole('checkbox', { name: '阅读并同意' }).check({ force: true });
+  await page.waitForTimeout(500);
+  // 点击「创建」— 注意精确匹配，避免点到「创建投票」
+  await page.getByRole('button', { name: '创建', exact: true }).click({ force: true });
+  await page.waitForTimeout(5000);
+  return page.url();  // 应跳转到 /episode/{eid}/stats
+}
+"
+```
+
+### 4.11 发布成功截图
+
+```bash
+playwright-cli screenshot
+cp .playwright-cli/page-*.png {basename}_publish_success.png
+```
 
 ---
 
 ## Phase 5: 清理
 
 ```bash
-agent-browser close
+playwright-cli close
+rm -f playwright-cli.json transcript_full.txt xiaoyuzhou_qr.png
 ```
 
 ---
@@ -386,25 +454,27 @@ agent-browser close
 | 节点 | 位置 | 确认内容 |
 |------|------|---------|
 | ✅1 | Phase 0.3 | bmx 连接和登录状态 |
-| ✅2 | Phase 1.4 | 选中的音频文件和字幕 |
-| ✅3 | Phase 2.4 | YouTube 视频链接和封面 |
-| ✅4 | Phase 3.5 | 生成的标题和单集内容 |
-| ✅5 | Phase 4.1 | 小宇宙已登录 |
-| ✅6 | Phase 4.6 | 发布成功截图 |
-
-每个确认点若用户不满意，回退到对应阶段重新执行。
+| ✅2 | Phase 1.3 | 选择 original 还是 mixed |
+| ✅3 | Phase 1.5 | 选中的音频文件和字幕 |
+| ✅4 | Phase 2.5 | YouTube 视频链接和封面 |
+| ✅5 | Phase 3.5 | 生成的标题和单集内容 |
+| ✅6 | Phase 4.2 | 小宇宙已登录 |
+| ✅7 | Phase 4.11 | 发布成功截图 |
 
 ## 错误处理
 
 | 场景 | 处理方式 |
 |------|---------|
-| bmx 未安装 | 提示执行 `pip install git+https://github.com/nowszhao/BiliMix.git#subdirectory=sdk` |
-| bmx 登录失败（退出码 2）| 重新收集用户名密码 |
-| bmx 无已完成任务 | 引导用户先用 bmx 提交并处理音频，或提供本地文件路径 |
-| bmx 服务不可用 | 提示检查 server 地址，确保服务运行中 |
-| YouTube 搜索无结果 | 请用户手动提供视频链接和发布时间 |
-| YouTube 缩略图不可用（< 200px） | 自动降级为 Pillow 文字封面 |
-| 小宇宙登录超时 | 重新截图展示登录二维码 |
-| 上传失败 | 检查文件大小（小宇宙限制 ≤200MB），检查网络，重试 |
-| agent-browser daemon 崩溃 | `agent-browser close` 清理后重新 `open` |
-| 发布按钮不可点击 | `snapshot -i` 重新获取元素状态，检查必填字段是否已填 |
+| bmx 未安装 | `pip install git+https://github.com/nowszhao/BiliMix.git#subdirectory=sdk` |
+| bmx 登录失败 | 重新收集用户名密码 |
+| bmx 无已完成任务 | 引导用户先提交并处理音频 |
+| `--field transcription` 返回 `null` | 从 `segments` 数组提取文本 |
+| YouTube 搜索无结果 | 请求用户提供 Google 搜索结果或手动提供链接 |
+| YouTube 缩略图 404 | 自动降级为 Pillow 文字封面 |
+| QR 码 canvas 渲染不全 | 从 React Fiber 提取 URL，Python qrcode 重生成 |
+| agent-browser upload 无效 | **切换到 playwright-cli**，使用 `setInputFiles` |
+| playwright-cli snapshot 无输出 | 创建 `{"outputMode":"stdout"}` 配置文件 |
+| 封面上传后弹出裁剪对话框 | 点击「裁切」确认 |
+| toast/overlay 遮挡按钮 | `force: true` 点击 |
+| 「创建」按钮有二义性 | 使用 `exact: true` 精确匹配 |
+| 文件大小超限（>200MB） | 提示用户小宇宙限制 ≤200MB |
