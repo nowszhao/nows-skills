@@ -110,6 +110,8 @@ bmx task result <task_id>
 
 > **注意**：`--field transcription` 字段可能返回 `null`，应从 `segments` 数组自行拼装。
 
+> ⚠️ **时间戳精确性**：Phase 3 生成章节导航时，**章节时间戳必须使用 segments 中该话题首次出现的 `start` 秒数**，通过 `{seconds // 60}:{seconds % 60:02d}` 格式化。**禁止估算或自行编造时间戳。** 此外，mixed 版音频时长可能短于原始时长——如果 mixed 版的 segments 没有被单独导出、而是与原始版共用同一套时间戳，则时间戳不需要缩放，直接用原始时间即可。
+
 ### 1.5 确认音频文件
 
 向用户展示：文件路径、大小（需 ≤200MB）、时长、字幕段数。确认后进入 Phase 2。
@@ -138,7 +140,17 @@ WebSearch "site:youtube.com {频道/会议名} {年份} {标题关键词}"
 - ✅ `site:youtube.com Snowflake Summit 2026 Platform Keynote`
 - ❌ `site:youtube.com "Snowflake Summit 2026" "Platform Keynote" Benoit Dageville`（引号+人名导致无结果）
 
-若 WebSearch 返回结果不含 YouTube 链接，直接请求用户提供 Google 搜索结果或手动提供链接。
+**若 `site:youtube.com` 搜索无 YouTube 结果，改用 WebFetch 直接访问 YouTube 搜索页面**：
+
+```bash
+WebFetch "https://www.youtube.com/results?search_query={搜索关键词}" "Find the YouTube video titled \"{原标题前15-20个词}\". Give me the full YouTube URL with the video ID."
+```
+
+> **为什么 `site:youtube.com` 可能失败**：bmx 中很多任务的 `source_url` 来自 anchor.fm、megaphone.fm 等播客平台而非 YouTube；原始标题也未必是 YouTube 视频标题。此时需要从描述和人名中重新组合搜索关键词。
+
+> **常见失败模式**：对于 bmx 里来自播客平台（anchor.fm 等）的任务，`site:youtube.com` 用原标题搜不到是正常的。优先用 YouTube search page URL + WebFetch。
+
+若以上两步均无结果，请求用户提供 Google 搜索结果截图或手动提供 YouTube 链接。
 
 ### 2.3 下载封面图片
 
@@ -195,10 +207,17 @@ img.save("{basename}_cover.png")
 
 加载 `references/content_prompts.md` 中「章节导航 Prompt」生成。
 
-格式严格按：
+**⚠️ 章节内容要求（必须严格遵守）**：
+
+- 每个章节的简介必须是 **1-2 句完整描述**，涵盖该部分的核心内容、关键论点或重要事实。**绝对禁止**只写一个词或短语作为章节简介（如「开场」「定义 agent」），这样的章节导航会在预览阶段被用户驳回。
+- 在确认环节展示完整的章节导航给用户预览，因为这是最容易返工的环节。
+
+输出格式严格按：
 ```
-00:00  【章节名】简介... 🧡🧡🧡🧡🧡
+00:00  【章节名】简介内容（1-2句，简洁但完整）... 🧡🧡🧡🧡🧡
 ```
+
+> **时间戳来源**：所有时间戳必须来自 `transcript_full.txt` 中该话题首句对应的 `[Ns-]` 前缀，通过 `秒数 / 60` 换算为 `MM:SS` 格式。不估算、不编造。
 
 ### 3.4 组装原文链接
 
@@ -278,7 +297,22 @@ img.save('xiaoyuzhou_qr.png')
 "
 ```
 
-用 `present_files` 展示 `xiaoyuzhou_qr.png` 给用户扫码。等待用户确认「已登录」。
+用 `present_files` 展示 `xiaoyuzhou_qr.png` 给用户扫码。
+
+**等待登录**：不要用 `grep "podcast"` 检测 URL（会误匹配 redirectURL 参数中的 "podcast" 造成假登录），改用 `snapshot` 检查页面是否出现播客列表中的实际内容。
+
+```bash
+# 轮询检查登录（每 5 秒 snapshot，检查是否出现「创建节目」等已登录特征）
+for i in $(seq 1 24); do
+  sleep 5
+  if agent-browser snapshot 2>&1 | grep -q "创建节目"; then
+    echo "✅ LOGGED IN!"
+    break
+  fi
+done
+```
+
+确认登录后，告知用户「已登录」，进入 Phase 4.3。
 
 ### 4.3 提取 Cookie 并切换工具
 
@@ -289,9 +323,11 @@ agent-browser eval "document.cookie"
 
 需要提取的 cookie：`x-jike-access-token`、`x-jike-refresh-token`、`_c_WBKFRo`、`_jid`
 
+> **⚠️ Cookie 提取时机**：刚登录时 `document.cookie` 可能不包含 `x-jike-access-token`（httpOnly cookie 在某些时机不可见）。**确认已登录（snapshot 显示播客后台）后再提取**，此时所有 cookie 通常已就绪。若仍缺 token，重试 `agent-browser eval "document.cookie"`。
+
 ```bash
-# 提取播客 ID
-agent-browser eval "Array.from(document.querySelectorAll('a')).filter(a => a.href?.includes('/podcast/')).map(a => a.href)"
+# 提取播客 ID — 优先从页面链接提取
+agent-browser eval "Array.from(document.querySelectorAll('a')).map(a => ({href: a.href, text: a.textContent?.trim()?.slice(0, 30)})).filter(x => x.href?.includes('/podcast/') && !x.href?.includes('/create'))"
 ```
 
 记录 24 位 hex 播客 ID。然后关闭 agent-browser：
@@ -344,19 +380,44 @@ async page => {
 ### 4.6 填写标题和 Show Notes
 
 ```bash
-# 标题
-playwright-cli fill <title_ref> "{标题}"
+# 标题 — 直接用 fill 即可
+playwright-cli fill 'input[placeholder*="标题"]' "{标题}"
 
-# Show Notes — 用 run-code 直接注入完整文本（避免 type 截断）
-playwright-cli run-code "
-async page => {
+# Show Notes — 必须用 Python + json.dumps 转义后注入
+# playwright-cli run-code 中不能使用 require('fs')，Node.js 模块在此上下文中不可用
+```
+
+**Show Notes 注入的正确方法**：
+
+```bash
+# Step 1: 用 Python 读取内容文件并生成 JS 转义后的代码
+python3 << 'PYEOF'
+import json
+with open('episode_content.md') as f:
+    notes = f.read()
+# 去掉标题行（已在表单中单独填写），从 ## 本期核心内容 开始
+lines = notes.split('\n')
+start = next(i for i, l in enumerate(lines) if l.startswith('## 本期核心内容'))
+show_notes = '\n'.join(lines[start:])
+js_code = f'''
+async (page) => {{
   const editor = page.getByRole('textbox').nth(1);
   await editor.click();
-  await editor.fill(\`{Phase 3 确认的完整 Show Notes}\`);
-  return 'done';
-}
-"
+  await editor.fill({json.dumps(show_notes)});
+  return 'show notes filled';
+}}
+'''
+with open('/tmp/inject_notes.js', 'w') as f:
+    f.write(js_code)
+PYEOF
+
+# Step 2: 执行注入
+playwright-cli run-code "$(cat /tmp/inject_notes.js)"
 ```
+
+> **为什么不用 `fill` 命令**：`playwright-cli fill` 对大段中文文本可能被截断。`run-code` + `editor.fill()` 避开了这个问题。
+>
+> **为什么不用 `require('fs')`**：`playwright-cli run-code` 的代码在浏览器 page 上下文执行，没有 Node.js `require`。
 
 ### 4.7 上传音频和封面
 
@@ -399,18 +460,44 @@ async page => {
 
 ### 4.9 处理遮挡元素
 
-页面常有多层 overlay 遮挡（Modal overlay、portal divs、toast 提示）。需要 force click 关闭：
+页面常有多层 overlay 遮挡（Modal overlay、portal divs、toast 提示）。**在点击「创建」之前必须全部清除。** 小宇宙创建页面常见的遮挡包括：
+
+| 遮挡类型 | 按钮文案 | 处理 |
+|---------|---------|------|
+| 上传后「裁剪图片」 | 裁切 | 直接 `force click` 确认（封面已是 1400×1400） |
+| 临时 toast 提示 | 稍后再说 | `force click` 关闭 |
+| 设置节目分类 | 稍后再说 / 去设置 | 先点「稍后再说」跳过，继续 |
+| 获取更多帮助 | 我知道了 | `force click` 关闭 |
+| 未保存内容警告 | 取消/确定关闭 | 点「取消」保留表单数据 |
+
+**务必在每次 upload 之后、点击创建之前，批量检查并关闭这些遮挡**：
 
 ```bash
-# 关闭 toast
 playwright-cli run-code "
 async page => {
+  // 1. 裁剪对话框（上传封面后出现）
+  const cropBtn = page.getByRole('button', { name: '裁切' });
+  if (await cropBtn.count() > 0) {
+    await cropBtn.click({ force: true });
+    await page.waitForTimeout(2000);
+  }
+  // 2. 稍后再说（分类/toast）
   const dismissBtns = page.getByRole('button', { name: '稍后再说' });
   if (await dismissBtns.count() > 0) {
     await dismissBtns.first().click({ force: true });
-    await page.waitForTimeout(500);
+    await page.waitForTimeout(1000);
   }
-  return 'toasts dismissed';
+  // 3. 我知道了（帮助提示）
+  const gotItBtn = page.getByRole('button', { name: '我知道了' });
+  if (await gotItBtn.count() > 0) {
+    await gotItBtn.click({ force: true });
+    await page.waitForTimeout(1000);
+  }
+  // 4. 去设置（分类设置，不点，已被稍后再说覆盖）
+  // 5. 滚动到底部确保「创建」按钮可见
+  await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+  await page.waitForTimeout(1000);
+  return 'all overlays cleared';
 }
 "
 ```
@@ -469,12 +556,17 @@ rm -f playwright-cli.json transcript_full.txt xiaoyuzhou_qr.png
 | bmx 登录失败 | 重新收集用户名密码 |
 | bmx 无已完成任务 | 引导用户先提交并处理音频 |
 | `--field transcription` 返回 `null` | 从 `segments` 数组提取文本 |
-| YouTube 搜索无结果 | 请求用户提供 Google 搜索结果或手动提供链接 |
+| YouTube `site:` 搜索无结果 | 改用 `WebFetch` 访问 `youtube.com/results` 搜索页；仍无结果则请求用户提供 Google 截图 |
 | YouTube 缩略图 404 | 自动降级为 Pillow 文字封面 |
 | QR 码 canvas 渲染不全 | 从 React Fiber 提取 URL，Python qrcode 重生成 |
+| 登录轮询误判（grep 匹配到 URL query 参数） | 改用 `snapshot` + `grep "创建节目"` 等页面内容词检测 |
+| `document.cookie` 缺少 token | 确认已进入后台页面后再试；httpOnly cookie 在页面跳转后可见 |
 | agent-browser upload 无效 | **切换到 playwright-cli**，使用 `setInputFiles` |
+| playwright-cli `require('fs')` 报错 | `run-code` 在 page 上下文执行，没有 Node.js API；改用 Python 预生成 JS 代码文件 |
+| 章节导航预览被用户驳回 | 确保每个章节有 1-2 句完整描述，时间戳来自 segments 的 `start` 字段，重新生成 |
 | playwright-cli snapshot 无输出 | 创建 `{"outputMode":"stdout"}` 配置文件 |
 | 封面上传后弹出裁剪对话框 | 点击「裁切」确认 |
-| toast/overlay 遮挡按钮 | `force: true` 点击 |
+| 创建前出现「设置分类」/「获取帮助」等遮挡 | 依次 force click「稍后再说」「我知道了」，再滚动到底部找「创建」 |
+| 「创建」点击后页面闪烁但 URL 未跳转 | 检查是否有未处理的 overlay（通常有「未保存内容」弹窗），点「取消」保留数据后重新清除遮挡 |
 | 「创建」按钮有二义性 | 使用 `exact: true` 精确匹配 |
 | 文件大小超限（>200MB） | 提示用户小宇宙限制 ≤200MB |
