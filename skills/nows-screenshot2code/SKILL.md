@@ -2,6 +2,7 @@
 name: nows-screenshot2code
 description: |
   把截图、设计稿、UI 图片转换为像素级还原的前端代码。指导 AI 按"分析→选型→生成→自检对比→交付"五阶段工作流产出单文件、自包含、可直接预览的 HTML。
+  生成的页面所有可见文字均支持点击即编辑（contenteditable），非编辑态零视觉提示。
   支持六种技术栈：html_tailwind、html_css、react_tailwind、vue_tailwind、bootstrap、ionic_tailwind。
   触发词包括但不限于：截图转代码、screenshot to code、把这张图还原成代码、把这个设计稿转成 HTML、
   clone this website、recreate this design、还原这个页面、截图转前端、UI 图片转代码、设计稿转代码、
@@ -125,6 +126,39 @@ description: |
 - 不要引用本地文件路径
 - 图片用占位 URL 或描述性 alt，标注哪些需要替换为真实资源
 
+### 文字可编辑（硬性要求）
+
+生成的页面里**所有可见文字**都必须支持点击即编辑。用户在任意文字上点击，该文字进入可编辑状态，可直接修改内容；点击别处或按 Esc 退出编辑。
+
+实现规范：
+
+- **通用方案**（适用于所有技术栈）：给承载文字的元素加 `contenteditable="true"`，包括 `<h1>`~`<h6>`、`<p>`、`<span>`、`<li>`、`<td>`、`<label>`、`<a>` 的文本、卡片标题 / 正文等
+- **范围控制**：只给文本内容元素加 `contenteditable`，不要加到纯布局容器（做布局用的 `<div>`）、按钮图标、`<img>`、`<svg>` 上
+- **React / Vue 栈**：不要用框架状态管理编辑逻辑，直接用原生 `contenteditable` 属性，保持单文件自包含、零额外状态复杂度
+- **视觉反馈**：编辑态可加极淡背景色或虚线下划线提示"正在编辑"，但**非编辑态下不得有任何视觉提示**——页面静态外观必须和原图一致
+- **Esc 退出**：监听 `keydown`，按 Esc 时 `blur()` 当前编辑元素
+- **不破坏布局**：编辑时文字长度变化不能撑破布局，用 `min-width` 或 `white-space` 控制
+
+参考实现（直接内联到生成的 HTML `<body>` 末尾）：
+
+```html
+<style>
+  [contenteditable="true"] { outline: none; }
+  [contenteditable="true"]:focus {
+    background-color: rgba(59, 130, 246, 0.08);
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.3);
+    border-radius: 2px;
+  }
+</style>
+<script>
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && document.activeElement?.isContentEditable) {
+      document.activeElement.blur();
+    }
+  });
+</script>
+```
+
 ---
 
 ## 第四步：自检验证（不要靠记忆）
@@ -189,6 +223,7 @@ description: |
 | **内容** | □ 所有文字都在且正确 □ 图片 / logo 已标注 □ 没有原图没有的装饰 |
 | **细节** | □ 圆角 □ 阴影 □ 按钮样式 □ 图标风格匹配原图（简洁 vs 装饰） |
 | **交互** | □ 结构改动后编辑态仍可用 □ JS 处理器正常 |
+| **可编辑** | □ 所有可见文字点击即可编辑 □ 非编辑态零视觉提示 □ 编辑不撑破布局 □ Esc 可退出 |
 | **响应式** | □ 常见宽度下布局不崩 □ 文字可读 |
 
 任一项不过，先修再交付。
@@ -255,6 +290,17 @@ Row 3: [col-12（5 张卡片）]
 
 **修法**：用户给布局反馈时，**不要局部打补丁**。重新通读原图，重画网格，逐行逐列对照用户说法。问题往往是层级的（元素放错了父节点），而不是位置的（在正确父节点里位置不对）。
 
+### 坑 7：文字可编辑搞坏布局 / 加了多余视觉提示
+
+**症状**：开启 `contenteditable` 后，文字编辑时撑破容器，或非编辑态出现了下划线 / 边框 / 背景色等原图没有的视觉元素。
+
+**根因**：浏览器默认给可编辑元素焦点轮廓，且编辑时内容长度变化影响布局宽度。
+
+**修法**：
+- 给 `[contenteditable]` 加 `outline: none`，只在 `:focus` 时用极淡背景色提示，非焦点态零视觉变化
+- 用 `min-width` 或 `white-space: nowrap`（视场景）防止编辑撑破
+- 结构改动后必须重新测试可编辑功能是否仍正常
+
 ---
 
 ## 边界情况与提示
@@ -293,3 +339,5 @@ Row 3: [col-12（5 张卡片）]
 - ❌ 改了结构不测交互功能
 - ❌ 用绝对定位 SVG 叠加做连接线（布局一变就崩）
 - ❌ 编造截图里没有的文字内容（必须逐字复刻原图文字）
+- ❌ 生成的文字不支持点击编辑（所有可见文字必须 `contenteditable`）
+- ❌ 非编辑态给文字加视觉提示（下划线 / 边框 / 背景色），破坏像素保真
