@@ -152,7 +152,7 @@ WebFetch "https://www.youtube.com/results?search_query={搜索关键词}" "Find 
 
 若以上两步均无结果，请求用户提供 Google 搜索结果截图或手动提供 YouTube 链接。
 
-### 2.3 下载封面图片
+### 2.3 下载封面图片并智能裁剪
 
 从 YouTube URL 提取 11 位 `VIDEO_ID`：
 
@@ -163,17 +163,46 @@ for size in maxresdefault hqdefault sddefault; do
 done
 ```
 
-裁剪为 1400×1400 正方形：
+**⚠️ 关键：必须基于人脸位置裁剪，不能用居中裁剪。** 播客封面（特别是 Lenny's Podcast 这类）嘉宾的脸通常在右侧或左侧而非正中。居中裁剪会把脸截掉一半。
+
+裁剪流程：
+
+1. **用 Read 工具查看 `/tmp/cover_temp.jpg`**（multimodal 视觉模型能看到图片）
+2. **大致估读人脸矩形框的像素坐标**（left, top, right, bottom），如 `(620, 0, 1080, 420)`
+3. **基于人脸框计算正方形裁剪窗口**：
+   - 方形边长 `s = min(w, h)`（YouTube 缩略图 1280×720，所以 `s = 720`）
+   - 目标：人脸完整保留 + 头像周围有舒适留白
+   - 简化公式：`left = max(0, face_cx - s // 2)`、`top = max(0, face_cy - s * 35 // 100)`
+   - 裁剪窗的 `(left, top, left+s, top+s)` 必须在图片范围内
+4. **生成正方形 1400×1400** 即可（小宇宙要求：360×360 ≤ 边长 ≤ 5000×5000；正方形即可）
 
 ```python
 from PIL import Image
 img = Image.open("/tmp/cover_temp.jpg")
 w, h = img.size
 s = min(w, h)
-img = img.crop(((w-s)//2, (h-s)//2, (w+s)//2, (h+s)//2))
+
+# === 这里是从 Read 工具看图后填入的人脸矩形（left, top, right, bottom）===
+face_box = (620, 0, 1080, 420)  # ← 必须先看图再填，不准用估计值
+fx1, fy1, fx2, fy2 = face_box
+face_cx, face_cy = (fx1 + fx2) // 2, (fy1 + fy2) // 2
+
+# 基于人脸中心定位正方形裁剪窗
+left = max(0, face_cx - s // 2)
+top = max(0, face_cy - int(s * 0.35))  # 脸在上 1/3 黄金位
+left = min(left, w - s)
+top = min(top, h - s)
+
+img = img.crop((left, top, left + s, top + s))
 img = img.resize((1400, 1400), Image.LANCZOS)
 img.save("{basename}_cover.png")
+
+# 校验：人脸必须完整落在裁剪窗内
+assert fx1 >= left and fx2 <= left + s, "人脸横向超出裁剪范围"
+assert fy1 >= top and fy2 <= top + s, "人脸纵向超出裁剪范围"
 ```
+
+> **为什么不引入 opencv / mediapipe 做面部检测**：这些库要么 API 变化大（opencv 5 移除了 CascadeClassifier），要么安装包大（mediapipe 几百 MB）。**直接用 multimodal 视觉看图填坐标是最简单稳定的方式**——只要在裁剪后用 `assert` 校验人脸没有超出范围就足够。
 
 ### 2.4 降级方案 — 文字封面
 
