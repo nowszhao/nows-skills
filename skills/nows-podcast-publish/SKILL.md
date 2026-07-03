@@ -169,40 +169,15 @@ done
 
 1. **用 Read 工具查看 `/tmp/cover_temp.jpg`**（multimodal 视觉模型能看到图片）
 2. **大致估读人脸矩形框的像素坐标**（left, top, right, bottom），如 `(620, 0, 1080, 420)`
-3. **基于人脸框计算正方形裁剪窗口**：
-   - 方形边长 `s = min(w, h)`（YouTube 缩略图 1280×720，所以 `s = 720`）
-   - 目标：人脸完整保留 + 头像周围有舒适留白
-   - 简化公式：`left = max(0, face_cx - s // 2)`、`top = max(0, face_cy - s * 35 // 100)`
-   - 裁剪窗的 `(left, top, left+s, top+s)` 必须在图片范围内
-4. **生成正方形 1400×1400** 即可（小宇宙要求：360×360 ≤ 边长 ≤ 5000×5000；正方形即可）
+3. **运行 `scripts/crop_cover.py`** 完成裁剪：
 
-```python
-from PIL import Image
-img = Image.open("/tmp/cover_temp.jpg")
-w, h = img.size
-s = min(w, h)
-
-# === 这里是从 Read 工具看图后填入的人脸矩形（left, top, right, bottom）===
-face_box = (620, 0, 1080, 420)  # ← 必须先看图再填，不准用估计值
-fx1, fy1, fx2, fy2 = face_box
-face_cx, face_cy = (fx1 + fx2) // 2, (fy1 + fy2) // 2
-
-# 基于人脸中心定位正方形裁剪窗
-left = max(0, face_cx - s // 2)
-top = max(0, face_cy - int(s * 0.35))  # 脸在上 1/3 黄金位
-left = min(left, w - s)
-top = min(top, h - s)
-
-img = img.crop((left, top, left + s, top + s))
-img = img.resize((1400, 1400), Image.LANCZOS)
-img.save("{basename}_cover.png")
-
-# 校验：人脸必须完整落在裁剪窗内
-assert fx1 >= left and fx2 <= left + s, "人脸横向超出裁剪范围"
-assert fy1 >= top and fy2 <= top + s, "人脸纵向超出裁剪范围"
+```bash
+python3 scripts/crop_cover.py /tmp/cover_temp.jpg 620 0 1080 420 {basename}_cover.png
 ```
 
-> **为什么不引入 opencv / mediapipe 做面部检测**：这些库要么 API 变化大（opencv 5 移除了 CascadeClassifier），要么安装包大（mediapipe 几百 MB）。**直接用 multimodal 视觉看图填坐标是最简单稳定的方式**——只要在裁剪后用 `assert` 校验人脸没有超出范围就足够。
+脚本内部逻辑：以人脸中心为锚点，按「脸上 1/3 黄金位」定位正方形裁剪窗，缩放到 1400×1400 并校验人脸未越界。
+
+> **为什么不引入 opencv / mediapipe 做面部检测**：这些库要么 API 变化大（opencv 5 移除了 CascadeClassifier），要么安装包大（mediapipe 几百 MB）。**直接用 multimodal 视觉看图填坐标是最简单稳定的方式**——`crop_cover.py` 内部有 `assert` 校验，人脸越界会直接报错。
 
 ### 2.4 降级方案 — 文字封面
 
@@ -250,15 +225,55 @@ assert fy1 >= top and fy2 <= top + s, "人脸纵向超出裁剪范围"
 
 ### 3.4 组装原文链接
 
+**原文链接放在 `episode_content.md` 最前面**（紧接标题之后），包含播客节目名称和 YouTube 单集标题：
+
 ```
-原文链接：{YouTube 视频 URL}（发布于 {发布时间}）
+**{播客节目名称}**: {YouTube 视频标题}
+{YouTube 视频 URL}（发布于 {发布时间}）
 ```
 
-### 3.5 展示内容预览并确认
+示例：
+```
+**Lenny's Podcast**: Why OpenAI is merging Codex and ChatGPT and the future of knowledge work | Andrew Ambrosino
+https://www.youtube.com/watch?v=P3KDebPTUrw（发布于 2026 年 6 月）
+```
+
+- 播客节目名称从 YouTube 频道名中提取
+- YouTube 视频标题用原始英文标题，不翻译
+
+### 3.5 生成 Show Notes（纯文本，非 Markdown）
+
+Show Notes 是小宇宙表单中填写的正文内容，**去掉 Markdown 格式** —— 用粗体纯文本替代 `##` 标题、去掉 `---` 分隔线：
+
+```
+本期核心内容
+OpenAI Codex 桌面应用负责人...
+
+你将听到
+- 为什么 AI 让...
+
+适合谁听
+- 正在思考...
+
+原文链接：Lenny's Podcast - Why OpenAI is merging Codex and ChatGPT and the future of knowledge work | Andrew Ambrosino
+https://www.youtube.com/watch?v=P3KDebPTUrw（发布于 2026 年 6 月）
+```
+
+> **为什么不用 Markdown**：小宇宙 Show Notes 不是 Markdown 渲染器，`##` 会显示为原始字面量，影响阅读体验。
+
+生成后在 `episode_content.md` 中保留 Markdown 版本（供留档），但注入小宇宙时用 `scripts/extract_show_notes.py` 预处理为纯文本：
+
+```bash
+python3 scripts/extract_show_notes.py episode_content.md
+```
+
+脚本自动完成：去除 `##` 前缀、跳过主标题、截断到章节导航之前、从文件第2行提取原文链接并追加到末尾。
+
+### 3.6 展示内容预览并确认
 
 将标题和完整内容展示给用户预览。用 `AskUserQuestion` 确认。
 
-### ⚠️ 3.6 内容一致性约束（关键）
+### ⚠️ 3.7 内容一致性约束（关键）
 
 **Phase 4 填入小宇宙的内容，必须与 Phase 3.5 用户确认过的内容逐字一致。** 禁止因打字效率、字符限制等原因临时简写、删改内容。若 `playwright-cli type/fill` 对大段文本有限制，使用 `run-code` + `editor.fill()` 直接注入完整文本。
 
@@ -416,23 +431,23 @@ playwright-cli fill 'input[placeholder*="标题"]' "{标题}"
 # playwright-cli run-code 中不能使用 require('fs')，Node.js 模块在此上下文中不可用
 ```
 
-**Show Notes 注入的正确方法**：
+**Show Notes 注入的正确方法**（纯文本格式，非 Markdown）：
 
 ```bash
-# Step 1: 用 Python 读取内容文件并生成 JS 转义后的代码
+# Step 1: 用 extract_show_notes.py 生成纯文本 show notes，再包装为 playwright run-code
 python3 << 'PYEOF'
-import json
-with open('episode_content.md') as f:
-    notes = f.read()
-# 去掉标题行（已在表单中单独填写），从 ## 本期核心内容 开始
-lines = notes.split('\n')
-start = next(i for i, l in enumerate(lines) if l.startswith('## 本期核心内容'))
-show_notes = '\n'.join(lines[start:])
+import json, subprocess
+
+show_notes = subprocess.check_output(
+    ["python3", "scripts/extract_show_notes.py", "episode_content.md"],
+    text=True
+).strip()
+
 js_code = f'''
 async (page) => {{
   const editor = page.getByRole('textbox').nth(1);
   await editor.click();
-  await editor.fill({json.dumps(show_notes)});
+  await editor.fill({json.dumps(show_notes, ensure_ascii=False)});
   return 'show notes filled';
 }}
 '''

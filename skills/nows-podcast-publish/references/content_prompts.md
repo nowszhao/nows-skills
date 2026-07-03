@@ -70,3 +70,20 @@
 ```
 
 选择最匹配的类型标签（专访/峰会/演讲/对谈/圆桌 等），然后接中文翻译后的标题。
+
+## 4. 原文链接格式
+
+放在 episode_content.md 最前面（紧接标题之后），同时包含播客节目名称和 YouTube 单集标题：
+
+```
+**{播客节目名称}**: {YouTube 视频标题}
+{YouTube URL}（发布于 {发布时间}）
+```
+
+示例：
+```
+**Lenny's Podcast**: Why OpenAI is merging Codex and ChatGPT and the future of knowledge work | Andrew Ambrosino
+https://www.youtube.com/watch?v=P3KDebPTUrw（发布于 2026 年 6 月）
+```
+
+> 注意：Show Notes 注入小宇宙时去掉 Markdown 加粗 `**`，写成 `原文链接：Lenny's Podcast - Why OpenAI is merging... {URL}` 即可。
