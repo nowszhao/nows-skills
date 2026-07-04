@@ -19,15 +19,13 @@ pip install git+https://github.com/nowszhao/BiliMix.git#subdirectory=sdk
 
 验证：`bmx --help`
 
-### playwright-cli
+### agent-browser（浏览器自动化）
 
-**小宇宙发布阶段使用 playwright-cli，不使用 agent-browser。** agent-browser 的 `upload` 命令对小宇宙 React 页面完全无效。
+小宇宙发布阶段**全程使用 agent-browser**（同一会话内完成登录、填表、上传、发布）。不要切换到 playwright-cli——cookie 转移会导致所有接口返回 500（openresty）而失效。
 
-```bash
-npm install -g @playwright/cli@latest
-```
-
-验证：`playwright-cli --version`
+- `agent-browser` 已在环境中可用，无需额外安装。
+- 关键能力：`open` / `eval` / `upload` / `click` / `check` / `fill` / `screenshot` / `snapshot`。
+- 给 hidden `input[type=file]` 手动赋 id 后，`agent-browser upload #id <file>` 可正常上传（直接 `upload` 点击上传区 div 会报 "Node is not a file input element"）。
 
 ### qrcode（Python）
 
@@ -181,11 +179,50 @@ python3 scripts/crop_cover.py /tmp/cover_temp.jpg 620 0 1080 420 {basename}_cove
 
 ### 2.4 降级方案 — 文字封面
 
-当所有缩略图均 < 200px 时，用 Pillow 生成深色文字封面（具体代码见旧版，保持不变）。
+当所有缩略图均 < 200px 时，用 Pillow 生成深色文字封面（标题两行 + 副标题）。保存到 `{basename}_cover.png`，后续 Phase 4.7 照常上传：
 
-### 2.5 确认溯源结果
+```python
+python3 - << 'PYEOF'
+from PIL import Image, ImageDraw, ImageFont
+W = H = 1400
+img = Image.new('RGB', (W, H), (18, 18, 22))
+d = ImageDraw.Draw(img)
+# 标题（换成真实标题，自动按宽度折行）
+title = "播客单集标题占位"
+sub = "副标题 / 节目名占位"
+try:
+    f1 = ImageFont.truetype("/System/Library/Fonts/PingFang.ttc", 96)
+    f2 = ImageFont.truetype("/System/Library/Fonts/PingFang.ttc", 48)
+except Exception:
+    f1 = f2 = ImageFont.load_default()
+# 简单居中（标题）
+tb = d.textbbox((0, 0), title, font=f1)
+d.text(((W - (tb[2]-tb[0]))//2, H//2 - 120), title, fill=(245, 245, 245), font=f1)
+sb = d.textbbox((0, 0), sub, font=f2)
+d.text(((W - (sb[2]-sb[0]))//2, H//2 + 20), sub, fill=(150, 150, 160), font=f2)
+img.save('{basename}_cover.png')
+print('saved {basename}_cover.png')
+PYEOF
+```
 
-展示 YouTube 链接、发布时间、封面路径。用户确认后进入 Phase 3。搜索不到则请用户提供链接。
+### 2.5 获取真实发布日期（精确到日，必须抓取，禁止估算）
+
+**⚠️ 发布时间必须精确到「日」（如 `2026 年 3 月 6 日`），绝不能只写月份。** 该值用于 Phase 3.4 原文链接的「（发布于 …）」，必须来自 YouTube 真实数据，AI 不得估算（实测 AI 曾把 3 月错写成 4 月）。
+
+从 watch 页面抓 `dateText` / `publishDate` 的 `simpleText` 字段（含「年/月/日」中文）：
+
+```bash
+curl -sS --noproxy '*' -m 20 "https://www.youtube.com/watch?v={VIDEO_ID}" 2>&1 \
+  | grep -oE '"(dateText|publishDate)":\{"simpleText":"[0-9]{4}年[0-9]{1,2}月[0-9]{1,2}日"' \
+  | grep -oE '[0-9]{4}年[0-9]{1,2}月[0-9]{1,2}日' | head -1
+# 期望输出示例: 2026年3月6日
+```
+
+> 若上述 grep 无输出（页面结构变化），改用 WebFetch 访问 watch 页并要求提取 `datePublished` / `发布于` 的完整年月日；仍失败则请求用户提供真实发布日期（精确到日）。**无论如何不得用 AI 编造的月份/日期。**
+
+### 2.6 确认溯源结果
+
+展示 YouTube 链接、**真实发布日期（精确到日）**、封面路径。用户确认后进入 Phase 3。搜索不到则请用户提供链接。
 
 ---
 
@@ -229,45 +266,52 @@ python3 scripts/crop_cover.py /tmp/cover_temp.jpg 620 0 1080 420 {basename}_cove
 
 ```
 **{播客节目名称}**: {YouTube 视频标题}
-{YouTube 视频 URL}（发布于 {发布时间}）
+{YouTube 视频 URL}（发布于 {真实发布日期，精确到日}）
 ```
+
+> ⚠️ **`{真实发布日期}` 必须来自 Phase 2.5 从 YouTube 抓取的值，精确到「年/月/日」（如 `2026 年 3 月 6 日`）。禁止只写月份、禁止 AI 估算。**
 
 示例：
 ```
 **Lenny's Podcast**: Why OpenAI is merging Codex and ChatGPT and the future of knowledge work | Andrew Ambrosino
-https://www.youtube.com/watch?v=P3KDebPTUrw（发布于 2026 年 6 月）
+https://www.youtube.com/watch?v=P3KDebPTUrw（发布于 2026 年 6 月 15 日）
 ```
 
 - 播客节目名称从 YouTube 频道名中提取
 - YouTube 视频标题用原始英文标题，不翻译
+- 发布日期格式固定为 `YYYY 年 M 月 D 日`，日不带前导零（如 `6 日` 而非 `06 日`）
 
-### 3.5 生成 Show Notes（纯文本，非 Markdown）
+### 3.5 生成 Show Notes（渲染 episode_content.md 的「预览」HTML）
 
-Show Notes 是小宇宙表单中填写的正文内容，**去掉 Markdown 格式** —— 用粗体纯文本替代 `##` 标题、去掉 `---` 分隔线：
+Show Notes 是小宇宙表单的正文，**必须和小宇宙后台「预览」看到的 episode_content.md 渲染结果完全一致**——保留 **加粗**、段落/换行结构、以及顶部的原文链接部分。
 
+> ⚠️ **历史坑（两种错误都必须避免）**：
+> 1. **直接注入原始 Markdown 源码**：`**`、`- `、`---` 会显示为字面量，看起来像乱码。
+> 2. **把 Markdown 当纯文本 strip 掉所有标记**：虽然去掉了字面量，但也丢掉了加粗和段落结构，和「预览」不一致。
+>
+> ✅ **正确做法**：用 `scripts/extract_show_notes.py` 把 Markdown **渲染成 HTML**（`##`→加粗标题、`` ** ``→`<strong>`、`- `→带 `•` 的段落、`` --- ``→`<hr>`），再在 Phase 4.5 用 `innerHTML` 注入 contenteditable。发布的就是带格式、和预览一致的富文本。
+
+渲染后的 HTML 样貌（节选）：
+
+```html
+<p><strong>The Analytics Engineering Podcast</strong>: The Iceberg ecosystem today (Anders Swanson)</p>
+<p>https://www.youtube.com/watch?v=...</p>
+<hr>
+<p><strong>本期核心内容</strong></p>
+<p>dbt Labs CEO ...</p>
+<p><strong>你将听到</strong></p>
+<p>• <strong>术语闪电战</strong>：查询引擎...</p>
 ```
-本期核心内容
-OpenAI Codex 桌面应用负责人...
 
-你将听到
-- 为什么 AI 让...
+> 注：列表项渲染为 `<p>• <strong>术语</strong>：描述</p>` 而非 `<ul><li>`，是为了在编辑器过滤掉 `<ul>` 时仍能保留 bullet 与换行；加粗始终用 `<strong>`。
 
-适合谁听
-- 正在思考...
-
-原文链接：Lenny's Podcast - Why OpenAI is merging Codex and ChatGPT and the future of knowledge work | Andrew Ambrosino
-https://www.youtube.com/watch?v=P3KDebPTUrw（发布于 2026 年 6 月）
-```
-
-> **为什么不用 Markdown**：小宇宙 Show Notes 不是 Markdown 渲染器，`##` 会显示为原始字面量，影响阅读体验。
-
-生成后在 `episode_content.md` 中保留 Markdown 版本（供留档），但注入小宇宙时用 `scripts/extract_show_notes.py` 预处理为纯文本：
+生成后在 `episode_content.md` 中保留 Markdown 版本（供留档），注入小宇宙时用 `scripts/extract_show_notes.py` 渲染为 HTML：
 
 ```bash
-python3 scripts/extract_show_notes.py episode_content.md
+python3 scripts/extract_show_notes.py episode_content.md > show_notes.html
 ```
 
-脚本自动完成：去除 `##` 前缀、跳过主标题、截断到章节导航之前、从文件第2行提取原文链接并追加到末尾。
+脚本自动完成：跳过 `#` 标题（已在「标题」字段）、`##`→加粗标题、`` ** ``→`<strong>`、`- `→带 `•` 的段落、`` --- ``→`<hr>`、逐行成块保留换行、保留 emoji 与 `【章节名】`、顶部原文链接（节目名+URL）原样保留。
 
 ### 3.6 展示内容预览并确认
 
@@ -275,21 +319,17 @@ python3 scripts/extract_show_notes.py episode_content.md
 
 ### ⚠️ 3.7 内容一致性约束（关键）
 
-**Phase 4 填入小宇宙的内容，必须与 Phase 3.5 用户确认过的内容逐字一致。** 禁止因打字效率、字符限制等原因临时简写、删改内容。若 `playwright-cli type/fill` 对大段文本有限制，使用 `run-code` + `editor.fill()` 直接注入完整文本。
+**Phase 4 填入小宇宙的内容，必须与 Phase 3.5 用户确认过的内容逐字一致。** 禁止因打字效率、字符限制等原因临时简写、删改内容。大段正文用 Phase 4.5 的 base64 JS 注入方式完整写入，不要依赖 `type`/`fill` 命令的逐字输入。
 
 ---
 
 ## Phase 4: 小宇宙发布
 
-### 概览：双工具协作
+### 核心原则
 
-| 步骤 | 工具 | 说明 |
-|------|------|------|
-| 4.1-4.2 登录 | agent-browser | 打开登录页、QR 码展示 |
-| 4.3 提取 cookie | agent-browser | 登录后提取 `document.cookie` |
-| 4.4-4.10 操作 | **playwright-cli** | 所有上传和表单操作 |
+**整个发布流程（登录 → 填表 → 上传 → 创建）都在同一个 agent-browser 会话内完成，绝不要切换 playwright-cli。**
 
-> **为什么不用 agent-browser 全程操作？** agent-browser 的 `upload` 命令对小宇宙页面无效（返回 `✓ Done` 但文件未附加到 DOM）。playwright-cli 的 `setInputFiles` 可以直接操作 hidden file input。
+> ⚠️ **已验证的坑**：playwright-cli 通过 cookie 转移恢复登录态后，小宇宙所有接口返回 500（openresty）。agent-browser 的 `upload` 命令对**未赋 id 的 hidden input 或 div 点击区**无效，但给 hidden `input[type=file]` 手动赋 id 后 `agent-browser upload #id` 完全正常。因此正确做法是**全程 agent-browser + 给隐藏 input 赋 id 上传**。
 
 ### 4.1 打开登录页（agent-browser）
 
@@ -358,224 +398,130 @@ done
 
 确认登录后，告知用户「已登录」，进入 Phase 4.3。
 
-### 4.3 提取 Cookie 并切换工具
+### 4.3 进入创建单集页
+
+登录后直接进入创建单集页（用 4.2 记录的播客 ID）：
 
 ```bash
-# 提取关键 cookies
-agent-browser eval "document.cookie"
+agent-browser open "https://podcaster.xiaoyuzhoufm.com/podcast/{pid}/episode/create"
+agent-browser wait 3000
 ```
 
-需要提取的 cookie：`x-jike-access-token`、`x-jike-refresh-token`、`_c_WBKFRo`、`_jid`
+> 也可从播客后台点「创建单集」进入，但直链更稳。进入后确认标题输入框（placeholder 含「标题」）和正文编辑区可见。
 
-> **⚠️ Cookie 提取时机**：刚登录时 `document.cookie` 可能不包含 `x-jike-access-token`（httpOnly cookie 在某些时机不可见）。**确认已登录（snapshot 显示播客后台）后再提取**，此时所有 cookie 通常已就绪。若仍缺 token，重试 `agent-browser eval "document.cookie"`。
+### 4.4 填写标题
 
 ```bash
-# 提取播客 ID — 优先从页面链接提取
-agent-browser eval "Array.from(document.querySelectorAll('a')).map(a => ({href: a.href, text: a.textContent?.trim()?.slice(0, 30)})).filter(x => x.href?.includes('/podcast/') && !x.href?.includes('/create'))"
+agent-browser fill 'input[placeholder*="标题"]' "{标题}"
 ```
 
-记录 24 位 hex 播客 ID。然后关闭 agent-browser：
+### 4.5 注入 Show Notes（contenteditable，innerHTML 富文本）
+
+小宇宙 Show Notes 是 `contenteditable` 富文本 div，**不能用 `type`/`fill` 命令直接填**。用 base64 编码 JS 注入 HTML（`innerHTML`，保留加粗/段落/列表结构，与预览一致），绕过特殊字符导致的 shell 展开失败：
 
 ```bash
-agent-browser close
-```
-
-### 4.4 启动 playwright-cli 并恢复登录态
-
-```bash
-playwright-cli open
-```
-
-创建 `playwright-cli.json` 配置 stdout 输出：
-
-```json
-{"outputMode": "stdout"}
-```
-
-注入 cookies：
-
-```bash
-playwright-cli run-code "
-async page => {
-  await page.context().addCookies([
-    {name: 'x-jike-access-token', value: '<token>', domain: '.xiaoyuzhoufm.com', path: '/'},
-    {name: 'x-jike-refresh-token', value: '<token>', domain: '.xiaoyuzhoufm.com', path: '/'},
-    {name: '_c_WBKFRo', value: '<value>', domain: '.xiaoyuzhoufm.com', path: '/'},
-    {name: '_jid', value: '<value>', domain: '.xiaoyuzhoufm.com', path: '/'}
-  ]);
-  return 'cookies set';
-}
-"
-```
-
-### 4.5 进入创建单集页面
-
-```bash
-playwright-cli run-code "
-async page => {
-  await page.goto('https://podcaster.xiaoyuzhoufm.com/podcast/{pid}/episode');
-  await page.getByRole('button', { name: '创建单集' }).click();
-  await page.waitForTimeout(3000);
-  return page.url();
-}
-"
-```
-
-### 4.6 填写标题和 Show Notes
-
-```bash
-# 标题 — 直接用 fill 即可
-playwright-cli fill 'input[placeholder*="标题"]' "{标题}"
-
-# Show Notes — 必须用 Python + json.dumps 转义后注入
-# playwright-cli run-code 中不能使用 require('fs')，Node.js 模块在此上下文中不可用
-```
-
-**Show Notes 注入的正确方法**（纯文本格式，非 Markdown）：
-
-```bash
-# Step 1: 用 extract_show_notes.py 生成纯文本 show notes，再包装为 playwright run-code
-python3 << 'PYEOF'
-import json, subprocess
-
-show_notes = subprocess.check_output(
-    ["python3", "scripts/extract_show_notes.py", "episode_content.md"],
-    text=True
-).strip()
-
-js_code = f'''
-async (page) => {{
-  const editor = page.getByRole('textbox').nth(1);
-  await editor.click();
-  await editor.fill({json.dumps(show_notes, ensure_ascii=False)});
-  return 'show notes filled';
-}}
-'''
-with open('/tmp/inject_notes.js', 'w') as f:
-    f.write(js_code)
+# 1) 用 Python 把 HTML 版 show_notes.html 塞进一段 JS（必须用 IIFE 包裹，否则 agent-browser eval 会报 Illegal return statement），写文件避免 shell 展开问题
+python3 - << 'PYEOF'
+import json
+html = open('show_notes.html', encoding='utf-8').read()
+js = (
+    "(()=>{"
+    "const ed = document.querySelector('[contenteditable=true]');"
+    "if(!ed){return 'NO_EDITOR';}"
+    "ed.focus();"
+    "ed.innerHTML = " + json.dumps(html, ensure_ascii=True) + ";"
+    "ed.dispatchEvent(new Event('input', {bubbles: true}));"
+    "return 'filled ' + ed.innerHTML.length;"
+    "})()"
+)
+open('/tmp/inject_js.txt', 'w', encoding='utf-8').write(js)
 PYEOF
 
-# Step 2: 执行注入
-playwright-cli run-code "$(cat /tmp/inject_notes.js)"
+# 2) base64 编码后用 agent-browser eval 执行
+B64=$(base64 < /tmp/inject_js.txt | tr -d '\n')
+agent-browser eval "eval(atob('$B64'))"
+# 期望输出: filled <HTML 字符数>
 ```
 
-> **为什么不用 `fill` 命令**：`playwright-cli fill` 对大段中文文本可能被截断。`run-code` + `editor.fill()` 避开了这个问题。
->
-> **为什么不用 `require('fs')`**：`playwright-cli run-code` 的代码在浏览器 page 上下文执行，没有 Node.js `require`。
+> ⚠️ **IIFE 必须包裹**：`agent-browser eval` 将代码作为顶层脚本执行，顶层 `return` 会报 `Illegal return statement`。JS 必须写成 `(()=>{ ... return xxx; })()` 的 IIFE 形式。
 
-### 4.7 上传音频和封面
+> ⚠️ **必须用 `ensure_ascii=True`（关键）**：`json.dumps(html, ensure_ascii=True)` 将所有中文等非 ASCII 字符转成 `\uXXXX` 转义序列（纯 ASCII），确保经过 shell→base64→eval 传输链路后浏览器端能正确还原。**绝对不能用 `ensure_ascii=False`**——原始 UTF-8 多字节字符在这条链路中会被截断/误解码，导致发布后中文显示为乱码（如 `本期核心内容` → `å¼ å§æ ¸å¿ƒå… å®¹`）。
 
-小宇宙页面有 3 个 `input[type=file]`，全部 hidden。**filechooser 事件不会触发**，直接用 `setInputFiles`：
+> ⚠️ **必须用 `innerHTML`（富文本）**，不要用 `textContent`——后者会把加粗/段落结构全抹成纯文本，和预览不一致。若页面有多个 contenteditable，改用更精确的选择器（如 `.mantine-Textarea-input` 或第 2 个 `[role=textbox]`）。注入后用 `snapshot` 核对内容已进入表单、加粗标记保留。
 
-| 索引 | accept | 用途 |
-|------|--------|------|
-| 0 | `image/jpeg,image/png,image/webp` | 多图封面 |
-| 1 | `audio/*` | 音频 |
-| 2 | `image/jpeg,image/png,image/webp` | 单图封面 |
+### 4.6 上传音频
+
+页面有 3 个 hidden `input[type=file]`：索引 0 = 多图封面（image），1 = 音频（audio/*），2 = 单图封面（image）。**先给音频 input 赋 id，再 upload**：
 
 ```bash
-playwright-cli run-code "
-async page => {
-  // 上传音频
-  await page.locator('input[type=file]').nth(1).setInputFiles('<音频绝对路径>');
-  // 上传封面
-  await page.locator('input[type=file]').nth(2).setInputFiles('<封面绝对路径>');
-  await page.waitForTimeout(3000);
-  return 'files uploaded';
-}
-"
+agent-browser eval "document.querySelectorAll('input[type=file]')[1].id='xyAudio'; 'ok'"
+agent-browser upload "#xyAudio" "<音频绝对路径>"
+# 期望输出: ✓ Done
 ```
 
-> 上传后 `evaluate(el => el.files.length)` 可能返回 0（React 清空），但 UI 会显示文件名即表示成功。
+> 不要点「点击上传音频」的 div 后用 `upload`——那是 div 不是 input，会报 "Node is not a file input element"。必须直接操作隐藏的 `input[type=file]`。
 
-### 4.8 处理裁剪对话框
-
-上传封面后，小宇宙会自动弹出「裁切图片」对话框（封面已是 1400×1400 不需调整）：
+### 4.7 上传封面 + 裁切对话框
 
 ```bash
-playwright-cli run-code "
-async page => {
-  await page.getByRole('button', { name: '裁切' }).click({ force: true });
-  await page.waitForTimeout(2000);
-  return 'cropped';
-}
-"
+agent-browser eval "document.querySelectorAll('input[type=file]')[2].id='xyCover'; 'ok'"
+agent-browser upload "#xyCover" "<封面绝对路径>"
+# 期望输出: ✓ Done
+sleep 2
 ```
 
-### 4.9 处理遮挡元素
-
-页面常有多层 overlay 遮挡（Modal overlay、portal divs、toast 提示）。**在点击「创建」之前必须全部清除。** 小宇宙创建页面常见的遮挡包括：
-
-| 遮挡类型 | 按钮文案 | 处理 |
-|---------|---------|------|
-| 上传后「裁剪图片」 | 裁切 | 直接 `force click` 确认（封面已是 1400×1400） |
-| 临时 toast 提示 | 稍后再说 | `force click` 关闭 |
-| 设置节目分类 | 稍后再说 / 去设置 | 先点「稍后再说」跳过，继续 |
-| 获取更多帮助 | 我知道了 | `force click` 关闭 |
-| 未保存内容警告 | 取消/确定关闭 | 点「取消」保留表单数据 |
-
-**务必在每次 upload 之后、点击创建之前，批量检查并关闭这些遮挡**：
+上传封面后小宇宙会弹出「裁切图片」对话框（封面已是 1400×1400，无需调整）：
 
 ```bash
-playwright-cli run-code "
-async page => {
-  // 1. 裁剪对话框（上传封面后出现）
-  const cropBtn = page.getByRole('button', { name: '裁切' });
-  if (await cropBtn.count() > 0) {
-    await cropBtn.click({ force: true });
-    await page.waitForTimeout(2000);
-  }
-  // 2. 稍后再说（分类/toast）
-  const dismissBtns = page.getByRole('button', { name: '稍后再说' });
-  if (await dismissBtns.count() > 0) {
-    await dismissBtns.first().click({ force: true });
-    await page.waitForTimeout(1000);
-  }
-  // 3. 我知道了（帮助提示）
-  const gotItBtn = page.getByRole('button', { name: '我知道了' });
-  if (await gotItBtn.count() > 0) {
-    await gotItBtn.click({ force: true });
-    await page.waitForTimeout(1000);
-  }
-  // 4. 去设置（分类设置，不点，已被稍后再说覆盖）
-  // 5. 滚动到底部确保「创建」按钮可见
-  await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
-  await page.waitForTimeout(1000);
-  return 'all overlays cleared';
-}
-"
+agent-browser eval "(()=>{const ov=document.querySelector('div.mantine-Modal-overlay'); const dlg=ov?ov.closest('[role=dialog]')||ov.parentElement:null; const b=dlg?[...dlg.querySelectorAll('button')].find(x=>x.innerText.trim()==='裁切'):[...document.querySelectorAll('button')].find(x=>x.innerText.trim()==='裁切'); if(b){b.click(); return 'cropped';} return 'no crop btn';})()"
+sleep 2
 ```
 
-### 4.10 勾选协议并创建
+### 4.8 清除遮挡 tip banner
+
+创建页常有多层 tip banner 遮挡「创建」按钮（如 `set-podcast-category-tip` 的「稍后再说」、`show-support-tip` 的「我知道了」）。**每次点创建前必须全部关闭**：
 
 ```bash
-playwright-cli run-code "
-async page => {
-  // 勾选「阅读并同意」
-  await page.getByRole('checkbox', { name: '阅读并同意' }).check({ force: true });
-  await page.waitForTimeout(500);
-  // 点击「创建」— 注意精确匹配，避免点到「创建投票」
-  await page.getByRole('button', { name: '创建', exact: true }).click({ force: true });
-  await page.waitForTimeout(5000);
-  return page.url();  // 应跳转到 /episode/{eid}/stats
-}
-"
+agent-browser eval "(()=>{const tips=[...document.querySelectorAll('[id]')].filter(e=>/tip$/.test(e.id)&&e.offsetParent!==null); let n=0; for(const t of tips){const b=[...t.querySelectorAll('button')].find(x=>['稍后再说','我知道了'].includes(x.innerText.trim())); if(b){b.click(); n++;}} return 'dismissed '+n+' tips';})()"
 ```
 
-### 4.11 发布成功截图
+### 4.9 勾选协议 + 点击创建（带重试）
 
 ```bash
-playwright-cli screenshot
-cp .playwright-cli/page-*.png {basename}_publish_success.png
+for i in 1 2 3 4 5; do
+  # 关闭所有可见 tip
+  agent-browser eval "(()=>{const tips=[...document.querySelectorAll('[id]')].filter(e=>/tip$/.test(e.id)&&e.offsetParent!==null); for(const t of tips){const b=[...t.querySelectorAll('button')].find(x=>['稍后再说','我知道了'].includes(x.innerText.trim())); if(b)b.click();} return tips.length;})()"
+  # 勾选「阅读并同意」
+  agent-browser eval "(()=>{const lab=[...document.querySelectorAll('label')].find(l=>l.innerText.includes('阅读并同意')); const cb=lab?(lab.querySelector('input[type=checkbox]')||(lab.getAttribute('for')?document.getElementById(lab.getAttribute('for')):null)):null; if(cb&&!cb.checked)cb.click();})()"
+  # 定位并点击创建（精确匹配文本「创建」，避免误点「创建投票」等）
+  agent-browser eval "(()=>{const b=[...document.querySelectorAll('button')].find(x=>x.innerText.trim()==='创建'); if(b){b.id='xyCreate'; return true;} return false;})()"
+  if agent-browser click "#xyCreate" 2>/dev/null; then echo "CLICKED on attempt $i"; break; fi
+  sleep 1
+done
 ```
+
+> 若 `agent-browser click` 仍报 "covered by ... tip"，说明又有新 tip 出现，循环会自动重新关闭并重试。
+
+### 4.10 成功校验 + 截图
+
+点击后 URL 应跳转到 `/episode/{eid}/stats`。校验并截图：
+
+```bash
+sleep 3
+agent-browser get url
+# 期望: https://podcaster.xiaoyuzhoufm.com/podcast/{pid}/episode/{eid}/stats
+agent-browser screenshot publish_success.png
+```
+
+用 `present_files` 展示 `publish_success.png`。确认标题、封面、描述均正确即发布成功。
 
 ---
 
 ## Phase 5: 清理
 
 ```bash
-playwright-cli close
-rm -f playwright-cli.json transcript_full.txt xiaoyuzhou_qr.png
+rm -f /tmp/inject_js.txt transcript_full.txt xiaoyuzhou_qr.png
+# 浏览器会话可保留供用户查看；如需关闭：agent-browser close
 ```
 
 ---
@@ -587,10 +533,10 @@ rm -f playwright-cli.json transcript_full.txt xiaoyuzhou_qr.png
 | ✅1 | Phase 0.3 | bmx 连接和登录状态 |
 | ✅2 | Phase 1.3 | 选择 original 还是 mixed |
 | ✅3 | Phase 1.5 | 选中的音频文件和字幕 |
-| ✅4 | Phase 2.5 | YouTube 视频链接和封面 |
+| ✅4 | Phase 2.6 | YouTube 视频链接、真实发布日期（精确到日）、封面 |
 | ✅5 | Phase 3.5 | 生成的标题和单集内容 |
 | ✅6 | Phase 4.2 | 小宇宙已登录 |
-| ✅7 | Phase 4.11 | 发布成功截图 |
+| ✅7 | Phase 4.10 | 发布成功截图 |
 
 ## 错误处理
 
@@ -604,13 +550,16 @@ rm -f playwright-cli.json transcript_full.txt xiaoyuzhou_qr.png
 | YouTube 缩略图 404 | 自动降级为 Pillow 文字封面 |
 | QR 码 canvas 渲染不全 | 从 React Fiber 提取 URL，Python qrcode 重生成 |
 | 登录轮询误判（grep 匹配到 URL query 参数） | 改用 `snapshot` + `grep "创建节目"` 等页面内容词检测 |
-| `document.cookie` 缺少 token | 确认已进入后台页面后再试；httpOnly cookie 在页面跳转后可见 |
-| agent-browser upload 无效 | **切换到 playwright-cli**，使用 `setInputFiles` |
-| playwright-cli `require('fs')` 报错 | `run-code` 在 page 上下文执行，没有 Node.js API；改用 Python 预生成 JS 代码文件 |
+| 登录超时（轮询未进入后台） | 用 AskUserQuestion 询问「重新生成二维码」，重跑 4.2 |
+| `agent-browser upload` 报 "Node is not a file input element" | 那是 div 点击区；给隐藏 `input[type=file]` 赋 id 后 `agent-browser upload #id` |
+| Show Notes 注入后内容为空 | Show Notes 是 contenteditable，用 4.5 的 base64 JS 注入，勿用 `type`/`fill` |
+| Show Notes 含 `**` / `- ` / `---` 等 Markdown 字面量（发布后像乱码） | 不能用 `textContent` 注入纯文本，也不能直接注入原始 Markdown。用 `extract_show_notes.py` 渲染成 HTML，并在 4.5 用 `innerHTML` 注入，保留加粗/段落/链接 |
 | 章节导航预览被用户驳回 | 确保每个章节有 1-2 句完整描述，时间戳来自 segments 的 `start` 字段，重新生成 |
-| playwright-cli snapshot 无输出 | 创建 `{"outputMode":"stdout"}` 配置文件 |
-| 封面上传后弹出裁剪对话框 | 点击「裁切」确认 |
-| 创建前出现「设置分类」/「获取帮助」等遮挡 | 依次 force click「稍后再说」「我知道了」，再滚动到底部找「创建」 |
-| 「创建」点击后页面闪烁但 URL 未跳转 | 检查是否有未处理的 overlay（通常有「未保存内容」弹窗），点「取消」保留数据后重新清除遮挡 |
-| 「创建」按钮有二义性 | 使用 `exact: true` 精确匹配 |
+| 封面上传后弹出裁剪对话框 | 用 4.7 的 eval 找「裁切」按钮点击确认 |
+| 创建前出现「设置分类」/「获取帮助」等 tip 遮挡 | 用 4.8 的 eval 批量关闭「稍后再说」「我知道了」，再点创建 |
+| 「创建」点击报 "covered by ... tip" | 仍有 tip 遮挡，重跑 4.9 重试循环自动关闭后点击 |
+| 「创建」按钮有二义性 | 按 `textContent.trim()==='创建'` 精确匹配，避免误点「创建投票」 |
 | 文件大小超限（>200MB） | 提示用户小宇宙限制 ≤200MB |
+| `agent-browser open` 报 `ERR_PROXY_CONNECTION_FAILED`（浏览器继承系统代理但代理不可达，如 ClashX 关闭） | 先 `agent-browser close`，再用 `agent-browser open --args "--no-proxy-server" URL` 直连；直连前用 `curl -sS --noproxy '*' -m 8` 验证目标站可达 |
+| `agent-browser eval` 报 `Illegal return statement`（顶层 return 在脚本上下文非法） | 注入 JS 必须包成 IIFE：`(()=>{ ... return xxx; })()`，见 4.5 示例代码 |
+| Show Notes 中文显示乱码（如 `本期核心内容` → `å¼ å§æ ¸å¿ƒå… å®¹`），英文/URL 正常 | `json.dumps` **必须用 `ensure_ascii=True`**（不能 False）；False 时原始 UTF-8 多字节字符在 shell→base64→eval 链路中被截断误解码；True 时所有非 ASCII 转为 `\uXXXX` 纯 ASCII，浏览器端正确还原 |

@@ -73,17 +73,19 @@
 
 ## 4. 原文链接格式
 
-放在 episode_content.md 最前面（紧接标题之后），同时包含播客节目名称和 YouTube 单集标题：
+放在 episode_content.md 最前面（紧接标题之后），同时包含播客节目名称和 YouTube 单集标题。
+
+> ⚠️ **发布日期必须精确到「日」**（如 `2026 年 6 月 15 日`），来自 Skill Phase 2.5 从 YouTube 抓取的真实值，禁止只写月份、禁止 AI 估算。
 
 ```
 **{播客节目名称}**: {YouTube 视频标题}
-{YouTube URL}（发布于 {发布时间}）
+{YouTube URL}（发布于 {真实发布日期，精确到日}）
 ```
 
 示例：
 ```
 **Lenny's Podcast**: Why OpenAI is merging Codex and ChatGPT and the future of knowledge work | Andrew Ambrosino
-https://www.youtube.com/watch?v=P3KDebPTUrw（发布于 2026 年 6 月）
+https://www.youtube.com/watch?v=P3KDebPTUrw（发布于 2026 年 6 月 15 日）
 ```
 
-> 注意：Show Notes 注入小宇宙时去掉 Markdown 加粗 `**`，写成 `原文链接：Lenny's Podcast - Why OpenAI is merging... {URL}` 即可。
+> 注意：保留 Markdown 加粗 `**` 和裸 URL 即可。`extract_show_notes.py` 会把这段渲染成 HTML（`<strong>` + 原样链接文本），再由 Skill Phase 4.5 以 `innerHTML` 注入小宇宙，呈现为带格式的原文链接。**不要手动去掉 `**` 或改写法**——那会破坏与预览的一致性。
