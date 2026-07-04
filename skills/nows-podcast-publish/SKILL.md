@@ -58,6 +58,24 @@ bmx auth login --username <username> --password <password>
 
 向用户报告：`✓ bmx 已连接到 {server}，用户 {username} 已登录`
 
+### 0.4 验证 CLI 完整性（关键，易踩坑）
+
+**即使 bmx 已安装，也必须跑一次 `bmx --help` 验证能正常启动。** PyPI 上的 `bilimix-cli` 1.0.0 是损坏版本：在 `build_parser` 阶段引用未定义的 `cmd_vocab_list`，`bmx --help` 或任何子命令都会直接崩溃（Traceback 含 `NameError: cmd_vocab_list`）。
+
+```bash
+bmx --help 2>&1 | head -3
+```
+
+- 若输出正常列出子命令（auth / task / audio …）→ CLI 完好，继续。
+- 若报 `cmd_vocab_list` 未定义或其他 `NameError` / `AttributeError` → **已装的 PyPI 版损坏**，强制从 GitHub 重装（注意 `--force-reinstall --no-cache-dir`，否则 pip 认为已满足而不重装）：
+
+```bash
+pip install --force-reinstall --no-cache-dir "git+https://github.com/nowszhao/BiliMix.git#subdirectory=sdk"
+bmx --help   # 重装后必须再次验证，确认不再报错
+```
+
+> ⚠️ 只写 `pip install git+...` 不够：若环境中已存在损坏的 PyPI 版，pip 可能判定"已安装满足要求"而跳过。必须带 `--force-reinstall --no-cache-dir` 并复查 `bmx --help`。
+
 ---
 
 ## Phase 1: 选择已处理完成的音频
@@ -451,7 +469,22 @@ agent-browser eval "eval(atob('$B64'))"
 
 ### 4.6 上传音频
 
-页面有 3 个 hidden `input[type=file]`：索引 0 = 多图封面（image），1 = 音频（audio/*），2 = 单图封面（image）。**先给音频 input 赋 id，再 upload**：
+页面有 3 个 hidden `input[type=file]`，顺序固定：
+
+| 索引 | accept | 用途 | 父链特征 |
+|------|--------|------|----------|
+| 0 | image/* | Show Notes 富文本「插图」上传（正文里插图片用） | 位于 `_richEditor` 工具栏内 |
+| 1 | audio/* | **音频** | 位于右侧栏 |
+| 2 | image/* | **单集封面** | 父链含「单集封面 点击上传封面 或打开资源库」 |
+
+> ⚠️ **上传前务必确认索引**：小宇宙曾改版，不同页面（创建页 / 编辑页）或不同时间 input 数量可能不同。上传封面前先用下面 eval 确认 `[2]` 确实是封面（父链文本含「单集封面」），避免传错位置导致封面静默失效：
+
+```bash
+agent-browser eval "(()=>{const inp=document.querySelectorAll('input[type=file]')[2]; let n=inp,chain=[]; for(let i=0;i<4;i++){n=n.parentElement; if(!n)break; chain.push((n.innerText||'').replace(/\\s+/g,' ').slice(0,20));} return JSON.stringify({accept:inp.accept, chain});})()"
+# 期望 chain 含 '单集封面 点击上传封面...' → 这才是封面 input
+```
+
+**先给音频 input 赋 id，再 upload**：
 
 ```bash
 agent-browser eval "document.querySelectorAll('input[type=file]')[1].id='xyAudio'; 'ok'"
@@ -461,21 +494,32 @@ agent-browser upload "#xyAudio" "<音频绝对路径>"
 
 > 不要点「点击上传音频」的 div 后用 `upload`——那是 div 不是 input，会报 "Node is not a file input element"。必须直接操作隐藏的 `input[type=file]`。
 
+> ⚠️ **点击封面上传区 div 不会打开文件框**：用 `agent-browser click` 点「点击上传封面」会弹出一个选图弹窗（资源库），且不会直接暴露 file input；用 JS `.click()` 连弹窗都不出。正确做法始终是：**直接 `agent-browser upload` 到隐藏的封面 `input[type=file]`（已确认是 idx 2）**。
+
 ### 4.7 上传封面 + 裁切对话框
 
 ```bash
 agent-browser eval "document.querySelectorAll('input[type=file]')[2].id='xyCover'; 'ok'"
 agent-browser upload "#xyCover" "<封面绝对路径>"
 # 期望输出: ✓ Done
-sleep 2
+sleep 3
 ```
 
-上传封面后小宇宙会弹出「裁切图片」对话框（封面已是 1400×1400，无需调整）：
+> ⚠️ **「裁切图片」弹窗必须出现——它是上传成功的唯一可靠信号。** 上传成功后小宇宙**必然**弹出裁切对话框（标题「裁切图片」，显示「当前尺寸：1500px*1500px 最小尺寸：360x360px」等）。**如果等 3 秒后没有任何裁切弹窗，说明上传根本没生效**（常见原因：idx 2 不是封面 input、或该 input 在创建页尚未渲染、或文件格式/大小被拒）。此时不要继续点创建——先回到 4.6 重新确认封面 input 索引，再重传。
+>
+> 判断弹窗是否出现的可靠 eval：
+> ```bash
+> agent-browser eval "(()=>{const m=[...document.querySelectorAll('.mantine-Modal-root,[role=dialog]')].find(x=>x.offsetParent!==null && x.innerText.includes('裁切图片')); return m?'CROP_MODAL_OPEN':'NO_CROP_MODAL';})()"
+> ```
+
+弹窗出现后，点击「裁切」确认（封面已是方形，无需调整）：
 
 ```bash
-agent-browser eval "(()=>{const ov=document.querySelector('div.mantine-Modal-overlay'); const dlg=ov?ov.closest('[role=dialog]')||ov.parentElement:null; const b=dlg?[...dlg.querySelectorAll('button')].find(x=>x.innerText.trim()==='裁切'):[...document.querySelectorAll('button')].find(x=>x.innerText.trim()==='裁切'); if(b){b.click(); return 'cropped';} return 'no crop btn';})()"
+agent-browser eval "(()=>{const m=[...document.querySelectorAll('.mantine-Modal-root,[role=dialog]')].find(x=>x.innerText.includes('裁切图片')); if(!m)return 'no crop modal'; const b=[...m.querySelectorAll('button')].find(x=>x.innerText.trim()==='裁切'); if(b){b.click(); return 'cropped';} return 'no 裁切 btn';})()"
 sleep 2
 ```
+
+> ⚠️ **必须点「裁切」才会真正写入封面。** 只上传不点裁切，封面不会保存（会静默回退成默认图或留空）。点完裁切后，新封面会以一个 1500px 左右的 `image.xyzcdn.net/...jpg` 出现在页面（旧默认封面可能仍以小缩略图形式残留在顶部 header，属正常，以编辑页校验为准）。
 
 ### 4.8 清除遮挡 tip banner
 
@@ -515,6 +559,24 @@ agent-browser screenshot publish_success.png
 
 用 `present_files` 展示 `publish_success.png`。确认标题、封面、描述均正确即发布成功。
 
+### 4.10.5 回编辑页校验封面（关键兜底）
+
+封面最容易"假成功"——上传/裁切任一步没真正写入，发布后封面会静默回退成默认图，肉眼不易察觉。发布后**必须**回编辑页确认封面上传区实际显示的是预期图：
+
+```bash
+agent-browser open "https://podcaster.xiaoyuzhoufm.com/podcast/{pid}/episode/{eid}/edit"
+sleep 3
+agent-browser eval "(()=>{const area=document.querySelector('._root_1m0ke_1'); if(!area)return 'NO_COVER_AREA'; const img=area.querySelector('img'); return JSON.stringify({areaText:area.innerText.slice(0,20), hasImg:!!img, imgSrc:img?img.src:null});})()"
+# 期望: { "areaText":"单集封面", "hasImg":true, "imgSrc":"https://image.xyzcdn.net/<新hash>.jpg@small" }
+```
+
+判读：
+- `hasImg: true` 且 `imgSrc` 是新的 `xyzcdn.net` 链接 → 封面已正确写入，✅ 完成。
+- `areaText` 仍含「点击上传封面」或 `imgSrc` 是旧的/默认图 → **封面没生效**。回到 4.7 重新上传并点裁切，再点编辑页的「更新」提交（编辑页提交按钮文本是「更新」而非「创建」）。
+- 公网页 `og:image` 短暂显示旧图是 CDN 缓存，只要编辑页 `hasImg:true` 即可，缓存会自然刷新。
+
+> ⚠️ 若发布后发现封面错误（如本次实战）：直接在编辑页 `/episode/{eid}/edit` 重传封面（4.7 同样流程）→ 点「裁切」→ 点「更新」即可，无需重新创建单集。
+
 ---
 
 ## Phase 5: 清理
@@ -537,12 +599,13 @@ rm -f /tmp/inject_js.txt transcript_full.txt xiaoyuzhou_qr.png
 | ✅5 | Phase 3.5 | 生成的标题和单集内容 |
 | ✅6 | Phase 4.2 | 小宇宙已登录 |
 | ✅7 | Phase 4.10 | 发布成功截图 |
+| ✅8 | Phase 4.10.5 | 回编辑页校验封面已正确写入（`hasImg:true` 且为新 `xyzcdn` 图，非默认图） |
 
 ## 错误处理
 
 | 场景 | 处理方式 |
 |------|---------|
-| bmx 未安装 | `pip install git+https://github.com/nowszhao/BiliMix.git#subdirectory=sdk` |
+| bmx 未安装 / 已装但损坏 | `pip install --force-reinstall --no-cache-dir "git+https://github.com/nowszhao/BiliMix.git#subdirectory=sdk"`；重装后必须 `bmx --help` 复查。PyPI 版 `bilimix-cli` 1.0.0 缺 `cmd_vocab_list` 会直接崩，只能从 GitHub 装 |
 | bmx 登录失败 | 重新收集用户名密码 |
 | bmx 无已完成任务 | 引导用户先提交并处理音频 |
 | `--field transcription` 返回 `null` | 从 `segments` 数组提取文本 |
@@ -555,10 +618,12 @@ rm -f /tmp/inject_js.txt transcript_full.txt xiaoyuzhou_qr.png
 | Show Notes 注入后内容为空 | Show Notes 是 contenteditable，用 4.5 的 base64 JS 注入，勿用 `type`/`fill` |
 | Show Notes 含 `**` / `- ` / `---` 等 Markdown 字面量（发布后像乱码） | 不能用 `textContent` 注入纯文本，也不能直接注入原始 Markdown。用 `extract_show_notes.py` 渲染成 HTML，并在 4.5 用 `innerHTML` 注入，保留加粗/段落/链接 |
 | 章节导航预览被用户驳回 | 确保每个章节有 1-2 句完整描述，时间戳来自 segments 的 `start` 字段，重新生成 |
-| 封面上传后弹出裁剪对话框 | 用 4.7 的 eval 找「裁切」按钮点击确认 |
+| 封面上传后**未**弹出「裁切图片」对话框 | 上传没生效。先按 4.6 的 eval 确认 `input[type=file][2]` 父链含「单集封面」（创建页 input 可能尚未渲染/索引不同）；确认无误后重传，必须等到裁切弹窗出现 |
 | 创建前出现「设置分类」/「获取帮助」等 tip 遮挡 | 用 4.8 的 eval 批量关闭「稍后再说」「我知道了」，再点创建 |
 | 「创建」点击报 "covered by ... tip" | 仍有 tip 遮挡，重跑 4.9 重试循环自动关闭后点击 |
 | 「创建」按钮有二义性 | 按 `textContent.trim()==='创建'` 精确匹配，避免误点「创建投票」 |
+| 发布后封面是默认图/与原图不符 | 上传封面后没点「裁切」或传错 input。回编辑页 `/episode/{eid}/edit` 重传封面（4.7 流程）→ 点「裁切」→ 点「更新」提交；用 4.10.5 的 eval 校验 `._root_1m0ke_1` 内 `img.src` 是否为预期图 |
+| 编辑页提交按钮文本是「更新」而非「创建」 | 编辑/改封面时用「更新」按钮；创建新单集时才用「创建」 |
 | 文件大小超限（>200MB） | 提示用户小宇宙限制 ≤200MB |
 | `agent-browser open` 报 `ERR_PROXY_CONNECTION_FAILED`（浏览器继承系统代理但代理不可达，如 ClashX 关闭） | 先 `agent-browser close`，再用 `agent-browser open --args "--no-proxy-server" URL` 直连；直连前用 `curl -sS --noproxy '*' -m 8` 验证目标站可达 |
 | `agent-browser eval` 报 `Illegal return statement`（顶层 return 在脚本上下文非法） | 注入 JS 必须包成 IIFE：`(()=>{ ... return xxx; })()`，见 4.5 示例代码 |
