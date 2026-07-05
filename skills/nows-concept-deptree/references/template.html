@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>概念层级依赖图</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans SC", sans-serif;
+  background: #f8f9fa; color: #212529; line-height: 1.6;
+}
+.container { max-width: 1200px; margin: 0 auto; padding: 24px 20px; }
+
+.header {
+  background: linear-gradient(135deg, #4DABF7 0%, #748FFC 100%);
+  color: #fff; padding: 32px 28px; border-radius: 12px; margin-bottom: 24px;
+}
+.header h1 { font-size: 28px; margin-bottom: 8px; }
+.header .meta { font-size: 14px; opacity: 0.9; display: flex; gap: 20px; flex-wrap: wrap; }
+.header .meta span { background: rgba(255,255,255,0.2); padding: 4px 12px; border-radius: 20px; }
+
+.overview-card {
+  background: #fff; border-radius: 12px; padding: 24px 28px; margin-bottom: 24px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+}
+.overview-card h2 { font-size: 20px; margin-bottom: 12px; color: #495057; }
+.overview-card p { font-size: 15px; color: #495057; margin-bottom: 8px; }
+.paradigm-badge {
+  display: inline-block; background: #FFF3BF; color: #E67700; padding: 4px 12px;
+  border-radius: 4px; font-size: 13px; font-weight: 600; margin: 4px 6px 4px 0;
+}
+
+.graph-toolbar {
+  display: flex; gap: 12px; align-items: center; margin-bottom: 16px; flex-wrap: wrap;
+}
+.graph-toolbar input[type="text"] {
+  flex: 1; min-width: 200px; padding: 8px 16px; border: 1px solid #dee2e6;
+  border-radius: 8px; font-size: 14px; outline: none; transition: border-color 0.2s;
+}
+.graph-toolbar input[type="text"]:focus { border-color: #4DABF7; }
+.graph-toolbar button {
+  padding: 8px 18px; border: 1px solid #dee2e6; border-radius: 8px; background: #fff;
+  font-size: 13px; cursor: pointer; transition: all 0.2s;
+}
+.graph-toolbar button:hover { background: #e9ecef; }
+.graph-toolbar button.primary { background: #4DABF7; color: #fff; border-color: #4DABF7; }
+.graph-toolbar button.primary:hover { background: #339AF0; }
+
+.graph-wrapper {
+  background: #fff; border-radius: 12px; padding: 20px; margin-bottom: 24px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08); position: relative; overflow: hidden;
+}
+.graph-wrapper svg { width: 100%; height: 700px; display: block; cursor: grab; }
+.graph-wrapper svg:active { cursor: grabbing; }
+
+/* Fullscreen */
+.graph-wrapper.fullscreen {
+  position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 9999;
+  border-radius: 0; margin: 0; padding: 12px; background: #fff;
+  display: flex; flex-direction: column;
+}
+.graph-wrapper.fullscreen svg { flex: 1; height: auto; min-height: 0; }
+.fullscreen-close {
+  position: fixed; top: 16px; right: 20px; z-index: 10000;
+  width: 40px; height: 40px; border-radius: 50%; border: none;
+  background: rgba(0,0,0,0.6); color: #fff; font-size: 22px;
+  cursor: pointer; display: none; align-items: center; justify-content: center;
+  transition: background 0.2s;
+}
+.fullscreen-close:hover { background: rgba(0,0,0,0.85); }
+.fullscreen-close.visible { display: flex; }
+
+/* Layer label on left side */
+.layer-label {
+  font-size: 12px; fill: #868E96; text-anchor: end; font-weight: 600;
+}
+
+/* Nodes */
+.node circle { stroke: #fff; stroke-width: 2px; cursor: pointer; transition: stroke-width 0.15s; }
+.node circle:hover { stroke-width: 4px; }
+.node text { font-size: 13px; pointer-events: none; fill: #212529; }
+.node.paradigm-shift circle { stroke: #FF6B6B; stroke-width: 3px; stroke-dasharray: 6 3; }
+
+/* Edges */
+.edge { fill: none; stroke-opacity: 0.45; }
+.edge.core { stroke: #495057; stroke-width: 2px; }
+.edge.branch { stroke: #ADB5BD; stroke-width: 1.2px; }
+
+/* Highlight states */
+.node.dimmed { opacity: 0.12; }
+.edge.dimmed { opacity: 0.06; }
+.node.highlighted circle { stroke: #FF6B6B; stroke-width: 4px; }
+
+/* Tooltip */
+.tooltip {
+  position: absolute; background: rgba(33,37,41,0.92); color: #fff; padding: 8px 14px;
+  border-radius: 6px; font-size: 13px; pointer-events: none; opacity: 0;
+  transition: opacity 0.15s; z-index: 100; max-width: 260px; line-height: 1.4;
+}
+.tooltip.visible { opacity: 1; }
+.tooltip .tt-label { font-weight: 600; margin-bottom: 2px; }
+.tooltip .tt-layer { font-size: 11px; opacity: 0.75; }
+
+/* Layer detail cards */
+.detail-section { margin-bottom: 24px; }
+.detail-section h2 { font-size: 20px; margin-bottom: 16px; color: #495057; }
+.layer-card {
+  background: #fff; border-radius: 10px; margin-bottom: 12px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.06); overflow: hidden;
+}
+.layer-header {
+  display: flex; align-items: center; gap: 12px; padding: 16px 24px;
+  cursor: pointer; user-select: none; transition: background 0.15s;
+}
+.layer-header:hover { background: #f1f3f5; }
+.layer-header .layer-color { width: 14px; height: 14px; border-radius: 50%; flex-shrink: 0; }
+.layer-header .layer-title { font-size: 16px; font-weight: 600; flex: 1; }
+.layer-header .layer-stars { font-size: 14px; color: #FCC419; white-space: nowrap; }
+.layer-header .layer-toggle { font-size: 18px; color: #ADB5BD; transition: transform 0.2s; }
+.layer-card.expanded .layer-toggle { transform: rotate(180deg); }
+.layer-body { padding: 0 24px 20px 50px; display: none; }
+.layer-card.expanded .layer-body { display: block; }
+.layer-body .concept-list { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
+.concept-tag {
+  padding: 4px 12px; border-radius: 20px; font-size: 13px; font-weight: 500;
+}
+.concept-tag.core { background: #E7F5FF; color: #1971C2; }
+.concept-tag.branch { background: #F1F3F5; color: #495057; }
+.layer-body .shift-note {
+  margin-top: 12px; padding: 10px 16px; background: #FFF9DB; border-radius: 6px;
+  font-size: 13px; color: #E67700; border-left: 3px solid #FCC419;
+}
+.layer-body .learn-hint { margin-top: 8px; font-size: 14px; color: #495057; }
+
+/* Legend */
+.legend {
+  background: #fff; border-radius: 12px; padding: 20px 24px; margin-bottom: 24px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08); display: flex; gap: 28px; flex-wrap: wrap;
+}
+.legend-item { display: flex; align-items: center; gap: 8px; font-size: 13px; color: #495057; }
+.legend-dot { width: 12px; height: 12px; border-radius: 50%; }
+.legend-line { width: 24px; height: 0; border-top: 2px solid; }
+.legend-line.thin { border-top-width: 1px; }
+
+/* Concept quick-reference table */
+.concept-table-section {
+  background: #fff; border-radius: 12px; padding: 24px 28px; margin-bottom: 24px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+}
+.concept-table-section h2 { font-size: 20px; margin-bottom: 4px; color: #495057; }
+.concept-table {
+  width: 100%; border-collapse: collapse; font-size: 14px;
+}
+.concept-table thead th {
+  text-align: left; padding: 10px 14px; background: #f8f9fa;
+  font-weight: 600; color: #495057; border-bottom: 2px solid #dee2e6;
+  font-size: 13px; white-space: nowrap;
+}
+.concept-table tbody td {
+  padding: 10px 14px; border-bottom: 1px solid #f1f3f5;
+  vertical-align: top; color: #495057;
+}
+.concept-table tbody tr:hover { background: #f8f9fa; }
+.concept-table .col-layer { width: 55px; text-align: center; }
+.concept-table .col-type { width: 65px; }
+.concept-table .col-name { width: 140px; font-weight: 600; }
+.concept-table .col-problem { line-height: 1.5; }
+.concept-table .col-deps { width: 160px; font-size: 13px; color: #495057; line-height: 1.5; }
+.concept-table .layer-dot {
+  display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px;
+}
+.type-badge {
+  display: inline-block; padding: 2px 10px; border-radius: 12px; font-size: 12px; font-weight: 500;
+}
+.type-badge.core { background: #E7F5FF; color: #1971C2; }
+.type-badge.branch { background: #F1F3F5; color: #868E96; }
+
+@media (max-width: 768px) {
+  .container { padding: 12px; }
+  .header { padding: 20px; }
+  .header h1 { font-size: 22px; }
+  .graph-wrapper svg { height: 500px; }
+  .concept-table .col-problem,
+  .concept-table .col-deps { display: none; }
+  .concept-table .col-name { width: 120px; font-size: 13px; }
+}
+</style>
+</head>
+<body>
+<div class="container">
+
+  <div class="header">
+    <h1>{{TARGET_CONCEPT}}</h1>
+    <div class="meta">
+      <span>{{DOMAIN}}</span>
+      <span>{{LAYER_COUNT}} 个认知层级</span>
+      <span>起点：{{START_LEVEL}}</span>
+      <span>{{GENERATE_DATE}}</span>
+    </div>
+  </div>
+
+  <div class="overview-card">
+    <h2>整体概览</h2>
+    <p>{{OVERVIEW_TEXT}}</p>
+    <p style="margin-top:8px;"><strong>核心依赖主线：</strong>{{MAIN_LINE}}</p>
+    <div style="margin-top:8px;"><strong>关键范式跃迁：</strong></div>
+    {{PARADIGM_BADGES}}
+  </div>
+
+  <div class="graph-toolbar">
+    <input type="text" id="searchInput" placeholder="搜索概念节点..." />
+    <button id="searchBtn" class="primary">搜索</button>
+    <button id="resetBtn">重置视图</button>
+    <button id="exportBtn">导出 PNG</button>
+    <button id="fullscreenBtn">全屏</button>
+  </div>
+
+  <div class="graph-wrapper" id="graphContainer">
+    <svg id="graph"></svg>
+    <div class="tooltip" id="tooltip"></div>
+  </div>
+
+  <button class="fullscreen-close" id="fsCloseBtn">&times;</button>
+
+  <div class="legend" id="legendArea"></div>
+
+  <div class="concept-table-section">
+    <h2>概念速查表</h2>
+    <p style="color:#868E96; font-size:14px; margin-bottom:16px;">每个概念用一句话说清它解决什么问题、依赖哪些前置概念。黄色底色 = 范式跃迁节点。</p>
+    <table class="concept-table">
+      <thead>
+        <tr>
+          <th class="col-layer">层级</th>
+          <th class="col-name">概念</th>
+          <th class="col-type">类型</th>
+          <th class="col-problem">要解决的问题</th>
+          <th class="col-deps">前置依赖</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{CONCEPT_TABLE_ROWS}}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="detail-section">
+    <h2>分层详解与学习建议</h2>
+    {{LAYER_CARDS}}
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/dagre@0.8.5/dist/dagre.min.js"></script>
+<script src="https://d3js.org/d3.v7.min.js"></script>
+<script>
+// ── Data ──
+const graphData = {{GRAPH_DATA}};
+
+// ── Layer colors (bottom-to-top, warm-to-cool) ──
+const LAYER_COLORS = [
+  "#FF6B6B","#FFA94D","#FFD43B","#69DB7C","#4DABF7","#748FFC","#9775FA","#DA77F2"
+];
+
+function getLayerColor(layer) { return LAYER_COLORS[(layer - 1) % LAYER_COLORS.length]; }
+
+// ── Legend generation ──
+const layerCount = Math.max(...graphData.nodes.map(n => n.layer));
+let legendHTML = '';
+for (let i = 1; i <= layerCount; i++) {
+  legendHTML += `<div class="legend-item"><span class="legend-dot" style="background:${getLayerColor(i)};"></span> L${i} 层</div>`;
+}
+legendHTML += `<div class="legend-item"><span class="legend-line"></span> 主干依赖</div>`;
+legendHTML += `<div class="legend-item"><span class="legend-line thin" style="border-color:#ADB5BD;"></span> 分支依赖</div>`;
+legendHTML += `<div class="legend-item"><span class="legend-dot" style="width:8px;height:8px;border:3px dashed #FF6B6B;"></span> 范式跃迁</div>`;
+d3.select("#legendArea").html(legendHTML);
+
+// ── SVG setup ──
+const svg = d3.select("#graph");
+const svgNode = svg.node();
+const container = d3.select("#graphContainer");
+const tooltip = d3.select("#tooltip");
+
+// ── dagre layout ──
+const g = new dagre.graphlib.Graph();
+g.setGraph({
+  rankdir: "BT",
+  nodesep: 55,
+  ranksep: 80,
+  marginx: 30,
+  marginy: 20,
+});
+g.setDefaultEdgeLabel(() => ({}));
+
+// Estimate node dimensions (label width ~= chars * 13 + padding)
+graphData.nodes.forEach(n => {
+  const w = Math.max(80, n.label.length * 14 + 20);
+  const h = n.type === "core" ? 44 : 34;
+  g.setNode(n.id, { width: w, height: h });
+});
+
+graphData.links.forEach(l => {
+  g.setEdge(l.source, l.target);
+});
+
+dagre.layout(g);
+
+// Extract positions
+const posMap = new Map();
+g.nodes().forEach(id => {
+  const node = g.node(id);
+  posMap.set(id, { x: node.x, y: node.y });
+});
+
+// Graph bounding box
+const graphW = g.graph().width;
+const graphH = g.graph().height;
+
+// ── SVG dimensions ──
+const svgW = Math.max(960, graphW + 120);
+const svgH = Math.max(700, graphH + 80);
+svg.attr("viewBox", [0, 0, svgW, svgH]);
+
+// ── Zoom ──
+const gRoot = svg.append("g");
+const zoom = d3.zoom()
+  .scaleExtent([0.2, 4])
+  .on("zoom", (event) => gRoot.attr("transform", event.transform));
+
+// Center the graph initially
+const initScale = Math.min(0.85, (svgW - 100) / graphW);
+const initX = (svgW - graphW * initScale) / 2;
+const initY = 30;
+svg.call(zoom);
+svg.call(zoom.transform, d3.zoomIdentity.translate(initX, initY).scale(initScale));
+
+// ── Layer background bands ──
+const layerBands = gRoot.append("g").attr("class", "layer-bands");
+const layerYBounds = new Map();
+for (let i = 1; i <= layerCount; i++) {
+  const nodesInLayer = graphData.nodes.filter(n => n.layer === i);
+  if (nodesInLayer.length === 0) continue;
+  const ys = nodesInLayer.map(n => posMap.get(n.id).y);
+  const minY = Math.min(...ys) - 30;
+  const maxY = Math.max(...ys) + 45;
+  layerYBounds.set(i, [minY, maxY]);
+  layerBands.append("rect")
+    .attr("x", 0).attr("y", minY)
+    .attr("width", graphW + 40).attr("height", maxY - minY)
+    .attr("fill", getLayerColor(i))
+    .attr("opacity", 0.06)
+    .attr("rx", 6);
+}
+
+// ── Layer labels (left side) ──
+gRoot.selectAll(".layer-label")
+  .data(Array.from(layerYBounds.entries()))
+  .join("text")
+  .attr("class", "layer-label")
+  .attr("x", 6).attr("y", d => (d[1][0] + d[1][1]) / 2 + 4)
+  .text(d => `L${d[0]}`)
+  .attr("fill", d => getLayerColor(d[0]));
+
+// ── Arrows ──
+svg.append("defs").selectAll("marker")
+  .data(["arrow-core","arrow-branch"])
+  .join("marker")
+  .attr("id", d => d)
+  .attr("viewBox", "0 -5 10 10")
+  .attr("refX", 14).attr("refY", 0)
+  .attr("markerWidth", 7).attr("markerHeight", 7)
+  .attr("orient", "auto")
+  .append("path").attr("d", "M0,-5L10,0L0,5")
+  .attr("fill", d => d === "arrow-core" ? "#495057" : "#ADB5BD");
+
+// ── Generate edge paths from dagre points ──
+function edgePath(edge) {
+  const points = edge.points || [];
+  if (points.length === 0) {
+    const s = posMap.get(edge.v);
+    const t = posMap.get(edge.w);
+    return `M${s.x},${s.y}L${t.x},${t.y}`;
+  }
+  let path = `M${points[0].x},${points[0].y}`;
+  for (let i = 1; i < points.length; i++) {
+    path += `L${points[i].x},${points[i].y}`;
+  }
+  return path;
+}
+
+// Augment links with dagre path data
+const linkData = graphData.links.map(l => {
+  const edge = g.edge(l.source, l.target);
+  return { ...l, path: edgePath(edge || {}) };
+});
+
+// ── Render edges ──
+const linkElements = gRoot.append("g").selectAll("path")
+  .data(linkData).join("path")
+  .attr("class", d => `edge ${d.type}`)
+  .attr("d", d => d.path)
+  .attr("marker-end", d => d.type === "core" ? "url(#arrow-core)" : "url(#arrow-branch)");
+
+// ── Render nodes ──
+const nodeElements = gRoot.append("g").selectAll("g")
+  .data(graphData.nodes).join("g")
+  .attr("class", d => `node${d.paradigm_shift ? " paradigm-shift" : ""}`)
+  .attr("transform", d => `translate(${posMap.get(d.id).x},${posMap.get(d.id).y})`);
+
+// Circles
+nodeElements.append("circle")
+  .attr("r", d => d.type === "core" ? 16 : 11)
+  .attr("fill", d => getLayerColor(d.layer));
+
+// Paradigm shift star
+nodeElements.filter(d => d.paradigm_shift)
+  .append("text")
+  .attr("text-anchor", "middle").attr("dy", "0.35em")
+  .attr("font-size", "10px").attr("fill", "#fff")
+  .attr("pointer-events", "none").text("\u2726");
+
+// Labels
+nodeElements.append("text")
+  .attr("dy", d => d.type === "core" ? -22 : -16)
+  .attr("text-anchor", "middle")
+  .text(d => d.label);
+
+// ── Click: highlight dependency paths ──
+nodeElements.on("click", function(event, d) { event.stopPropagation(); highlightPaths(d.id); });
+svg.on("click", () => resetHighlight());
+
+function highlightPaths(nodeId) {
+  const adjUp = new Map(), adjDown = new Map();
+  graphData.links.forEach(l => {
+    if (!adjUp.has(l.source)) adjUp.set(l.source, []);
+    adjUp.get(l.source).push(l.target);
+    if (!adjDown.has(l.target)) adjDown.set(l.target, []);
+    adjDown.get(l.target).push(l.source);
+  });
+  const reachable = new Set([nodeId]);
+  let q = [nodeId];
+  while (q.length) { const cur = q.shift(); (adjUp.get(cur) || []).forEach(n => { if (!reachable.has(n)) { reachable.add(n); q.push(n); } }); }
+  q = [nodeId];
+  while (q.length) { const cur = q.shift(); (adjDown.get(cur) || []).forEach(n => { if (!reachable.has(n)) { reachable.add(n); q.push(n); } }); }
+
+  const connectedEdges = new Set();
+  graphData.links.forEach((l, i) => { if (reachable.has(l.source) && reachable.has(l.target)) connectedEdges.add(i); });
+
+  nodeElements.classed("dimmed", d => !reachable.has(d.id));
+  nodeElements.classed("highlighted", d => d.id === nodeId);
+  linkElements.classed("dimmed", (d, i) => !connectedEdges.has(i));
+}
+function resetHighlight() { nodeElements.classed("dimmed", false).classed("highlighted", false); linkElements.classed("dimmed", false); }
+
+// ── Tooltip ──
+nodeElements.on("mouseenter", function(event, d) {
+  tooltip.classed("visible", true)
+    .html(`<div class="tt-label">${d.label}</div>
+           <div class="tt-layer">第${d.layer}层 · ${d.type==="core"?"核心主干":"分支支撑"}${d.paradigm_shift?" · 范式跃迁":""}</div>
+           <div style="margin-top:4px;">${d.desc||""}</div>`);
+});
+nodeElements.on("mousemove", function(event) {
+  const rect = container.node().getBoundingClientRect();
+  tooltip.style("left", (event.clientX - rect.left + 14) + "px")
+         .style("top", (event.clientY - rect.top - 12) + "px");
+});
+nodeElements.on("mouseleave", () => tooltip.classed("visible", false));
+
+// ── Search ──
+d3.select("#searchBtn").on("click", doSearch);
+d3.select("#searchInput").on("keydown", (event) => { if (event.key === "Enter") doSearch(); });
+function doSearch() {
+  const query = d3.select("#searchInput").property("value").toLowerCase().trim();
+  if (!query) { resetHighlight(); return; }
+  const matched = graphData.nodes.find(n => n.label.toLowerCase().includes(query));
+  if (matched) {
+    highlightPaths(matched.id);
+    const pos = posMap.get(matched.id);
+    const transform = d3.zoomIdentity.translate(svgW/2, svgH/2).scale(1.5).translate(-pos.x, -pos.y);
+    svg.transition().duration(600).call(zoom.transform, transform);
+  }
+}
+
+// ── Reset ──
+d3.select("#resetBtn").on("click", () => {
+  resetHighlight();
+  d3.select("#searchInput").property("value", "");
+  svg.transition().duration(500).call(zoom.transform, d3.zoomIdentity.translate(initX, initY).scale(initScale));
+});
+
+// ── Export PNG ──
+d3.select("#exportBtn").on("click", () => {
+  const serializer = new XMLSerializer();
+  const svgString = serializer.serializeToString(svgNode);
+  const canvas = document.createElement("canvas");
+  canvas.width = svgW * 2; canvas.height = svgH * 2;
+  const ctx = canvas.getContext("2d");
+  const img = new Image();
+  const blob = new Blob([svgString], {type:"image/svg+xml;charset=utf-8"});
+  const url = URL.createObjectURL(blob);
+  img.onload = function() {
+    ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    URL.revokeObjectURL(url);
+    const a = document.createElement("a"); a.download = "concept-hierarchy.png"; a.href = canvas.toDataURL("image/png"); a.click();
+  };
+  img.src = url;
+});
+
+// ── Fullscreen ──
+const fsCloseBtn = document.getElementById("fsCloseBtn");
+const graphWrapper = document.getElementById("graphContainer");
+
+d3.select("#fullscreenBtn").on("click", toggleFullscreen);
+fsCloseBtn.addEventListener("click", exitFullscreen);
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && graphWrapper.classList.contains("fullscreen")) exitFullscreen();
+});
+
+function toggleFullscreen() {
+  graphWrapper.classList.add("fullscreen");
+  fsCloseBtn.classList.add("visible");
+  d3.select("#fullscreenBtn").text("退出全屏");
+  // Recompute SVG size
+  svg.attr("viewBox", [0, 0, svgW, svgH]);
+  // Re-center
+  const scale = (window.innerWidth - 24) / svgW;
+  svg.transition().duration(300).call(zoom.transform,
+    d3.zoomIdentity.translate((window.innerWidth - svgW * scale) / 2, 16).scale(scale));
+}
+function exitFullscreen() {
+  graphWrapper.classList.remove("fullscreen");
+  fsCloseBtn.classList.remove("visible");
+  d3.select("#fullscreenBtn").text("全屏");
+  svg.transition().duration(300).call(zoom.transform,
+    d3.zoomIdentity.translate(initX, initY).scale(initScale));
+}
+</script>
+</body>
+</html>
