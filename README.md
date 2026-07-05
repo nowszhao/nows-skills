@@ -11,21 +11,23 @@ git clone https://github.com/changhozhao/nows-skills.git
 cd nows-skills
 ```
 
-把需要的 skill 目录复制到你的本地 skills 目录里，例如：
+把需要的 skill 目录复制到你的智能体 skills 目录里，例如：
 
 ```bash
-mkdir -p ~/.workbuddy/skills
-cp -R skills/nows-tech101 ~/.workbuddy/skills/
-cp -R skills/nows-tech-research-deck ~/.workbuddy/skills/
-cp -R skills/nows-hunzige-perspective ~/.workbuddy/skills/
-cp -R skills/nows-llm-wiki ~/.workbuddy/skills/
-cp -R skills/nows-iplus-reading ~/.workbuddy/skills/
-cp -R skills/nows-content-distill ~/.workbuddy/skills/
-cp -R skills/nows-article-anlyze ~/.workbuddy/skills/
-cp -R skills/nows-podcast-publish ~/.workbuddy/skills/
+# 如果你的智能体 skills 目录在 ~/.skills/
+mkdir -p ~/.skills
+cp -R skills/nows-tech101 ~/.skills/
+cp -R skills/nows-tech-research-deck ~/.skills/
+cp -R skills/nows-hunzige-perspective ~/.skills/
+cp -R skills/nows-llm-wiki ~/.skills/
+cp -R skills/nows-iplus-reading ~/.skills/
+cp -R skills/nows-content-distill ~/.skills/
+cp -R skills/nows-article-anlyze ~/.skills/
+cp -R skills/nows-concept-deptree ~/.skills/
+cp -R skills/nows-podcast-publish ~/.skills/
 ```
 
-如果你使用的是 `~/.claude/skills/`，把目标目录替换一下就行。
+不同智能体的 skills 目录路径不同，请替换为目标路径（如 `~/.workbuddy/skills/`、`~/.claude/skills/` 等）。
 
 
 
@@ -40,6 +42,7 @@ cp -R skills/nows-podcast-publish ~/.workbuddy/skills/
 | `nows-iplus-reading` | 基于克拉申 i+1 假设，通过逻辑推理式问答定位认知边界，推荐"刚好能吸收的下一步"精读路径（精确到小节） | 想精读一本书但不知从哪读起、想跳过已懂部分、想系统入门某个领域时 | 诊断结论 + 小节级 i+1 精读 / 略读 / 暂不学习清单 | `帮我精读《思考，快与慢》`<br>`我想搞懂行为经济学，从哪开始`<br>`帮我设计 i+1 阅读路径` |
 | `nows-content-distill` | 把一篇文章/一个 YouTube 视频压成"刻进脑子的心理表征"——核心概念、金字塔行文逻辑、差异化亮点、金句锚点、≤500 字最简复述 | 看完一篇/一个视频，想沉淀成自己能复述、能联想、能调用的内化卡片时 | `<slug>-distill.md` 与单文件 `<slug>-distill.html`（笔记风、零依赖、深色模式、打印友好） | `帮我把这篇文章 distill 一下：<URL>`<br>`刻印一下这个 YouTube 视频`<br>`压一下这篇，我想留下心理表征` |
 | `nows-article-anlyze` | 把深度文章 / 行业研报 / 产品发布 Keynote 拆成「概念库 + 金字塔 + 可点击流程图 + 原文映射」的可交互单文件 HTML，发布会类还附战略动因卡片、竞争定位矩阵、行业趋势预测 | 想结构化解析一篇长文 / 报告 / 发布会实录，做成可视化、可溯源、可离线分享的工作台时 | 单文件 HTML（深蓝商务质感、零依赖、流程图节点跳转原文锚点） | `帮我把这篇研报拆解成可视化 HTML`<br>`把这场 Keynote 解构成战略 + 竞争分析`<br>`把这篇商业文章做成可点击溯源的卡片` |
+| `nows-concept-deptree` | 梳理概念的完整前置知识链条，构建从当前水平到目标概念的阶梯学习路径，拆解复杂概念的层级依赖关系 | 想搞清楚「学XX之前需要先会什么」、定位知识断层、生成结构化学习路线时 | 交互式 HTML 报告（dagre 分层拓扑图 + 概念速查表 + 分层详解卡片） | `帮我梳理学大语言模型需要什么前置知识`<br>`从编程基础到 Kubernetes 需要学什么`<br>`拆解 Transformer 的概念层级依赖` |
 | `nows-podcast-publish` | 将音频一键发布到小宇宙播客平台：bmx CLI 处理音频 → YouTube 溯源获取封面 → AI 生成标题/介绍/章节 → 浏览器自动化上传发布 | 有音频文件需要发布到小宇宙播客、需要全流程自动化处理时 | bmx 已处理音频 + YouTube 来源映射 + 小宇宙平台已发布单集 | `帮我把这期播客发布到小宇宙`<br>`上传音频到小宇宙`<br>`发布 nows podcast` |
 | `nows-screenshot2code` | 把截图、设计稿、UI 图片转换为像素级还原的前端代码，支持 6 种技术栈（html_tailwind / react / vue / bootstrap / ionic），五阶段工作流 + 自检对比循环 | 丢来一张截图 / 设计稿 / UI 图，想要对应的前端代码 / HTML / 页面时 | 单文件自包含 `index.html`（内联 CSS+JS，依赖走 CDN） | `帮我把这张截图还原成 HTML`<br>`screenshot to code`<br>`clone this website`<br>`把这个设计稿转成代码`<br>`一比一还原这个界面` |
 
