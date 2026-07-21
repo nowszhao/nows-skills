@@ -25,6 +25,7 @@ cp -R skills/nows-content-distill ~/.skills/
 cp -R skills/nows-article-anlyze ~/.skills/
 cp -R skills/nows-concept-deptree ~/.skills/
 cp -R skills/nows-podcast-publish ~/.skills/
+cp -R skills/nows-video-bmxcut ~/.skills/
 ```
 
 不同智能体的 skills 目录路径不同，请替换为目标路径（如 `~/.workbuddy/skills/`、`~/.claude/skills/` 等）。
@@ -45,6 +46,7 @@ cp -R skills/nows-podcast-publish ~/.skills/
 | `nows-concept-deptree` | 梳理概念的完整前置知识链条，构建从当前水平到目标概念的阶梯学习路径，拆解复杂概念的层级依赖关系 | 想搞清楚「学XX之前需要先会什么」、定位知识断层、生成结构化学习路线时 | 交互式 HTML 报告（dagre 分层拓扑图 + 概念速查表 + 分层详解卡片） | `帮我梳理学大语言模型需要什么前置知识`<br>`从编程基础到 Kubernetes 需要学什么`<br>`拆解 Transformer 的概念层级依赖` |
 | `nows-podcast-publish` | 将音频一键发布到小宇宙播客平台：bmx CLI 处理音频 → YouTube 溯源获取封面 → AI 生成标题/介绍/章节 → 浏览器自动化上传发布 | 有音频文件需要发布到小宇宙播客、需要全流程自动化处理时 | bmx 已处理音频 + YouTube 来源映射 + 小宇宙平台已发布单集 | `帮我把这期播客发布到小宇宙`<br>`上传音频到小宇宙`<br>`发布 nows podcast` |
 | `nows-screenshot2code` | 把截图、设计稿、UI 图片转换为像素级还原的前端代码，支持 6 种技术栈（html_tailwind / react / vue / bootstrap / ionic），五阶段工作流 + 自检对比循环 | 丢来一张截图 / 设计稿 / UI 图，想要对应的前端代码 / HTML / 页面时 | 单文件自包含 `index.html`（内联 CSS+JS，依赖走 CDN） | `帮我把这张截图还原成 HTML`<br>`screenshot to code`<br>`clone this website`<br>`把这个设计稿转成代码`<br>`一比一还原这个界面` |
+| `nows-video-bmxcut` | 将 BiliMix 配音视频通过 ASS 字幕分析智能切分为短视频系列，含标题、简介、标签、推荐指数 | 播客/课程/访谈等长视频需要切成独立短视频分发时 | Markdown 切片方案 + 可选 FFmpeg 切割视频文件 | `帮我把这个视频做切片`<br>`这期播客帮我切短视频`<br>`bmxcut 这个视频` |
 
 
 ## 建议
