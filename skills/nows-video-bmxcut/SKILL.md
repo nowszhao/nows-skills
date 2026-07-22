@@ -1,6 +1,6 @@
 ---
 name: nows-video-bmxcut
-description: 将长视频通过 BiliMix 配音 + Agent 字幕分析，智能切分为短视频系列。输出含文件路径和推荐指数的 Markdown 方案。适用于播客/课程/访谈转短视频。
+description: 将长视频通过 BiliMix 配音 + Agent 字幕分析，智能切分为短视频系列，并一键批量定时发布到微信视频号。覆盖全流程：BiliMix 下载 → 字幕分析 → 智能分段 → FFmpeg 切割 → 视频号批量定时发表。适用于播客/课程/访谈转短视频并发布。
 agent_created: true
 triggers:
   - "视频切片"
@@ -9,11 +9,31 @@ triggers:
   - "生成短视频"
   - "BiliMix 切片"
   - "nows-video-bmxcut"
+  - "发布到视频号"
+  - "切片并发布"
+  - "切视频发视频号"
 ---
 
 # nows-video-bmxcut
 
-将 BiliMix 配音视频的 ASS 字幕文件交给 Agent 直接分析，智能分段后输出 Markdown 切片方案。Agent 可进一步用 FFmpeg 完成实际切割。
+将 BiliMix 配音视频的 ASS 字幕文件交给 Agent 直接分析，智能分段后输出 Markdown 切片方案。Agent 可进一步用 FFmpeg 完成实际切割，并通过浏览器自动化一键批量定时发布到微信视频号。
+
+## 可配置默认值（视频号发布用）
+
+发布前向用户确认以下参数，用户可按需修改，默认值为上次使用的配置：
+
+| 参数 | 默认值 | 说明 |
+|------|--------|------|
+| 短标题 | `Agentic知识图谱` | 所有切片统一使用 |
+| 合集 | `吴恩达-从零开始构建Agent知识图谱` | 视频号合集名 |
+| 位置 | `不显示位置` | 固定 |
+| 标签 | `#知识图谱 #智能体 #AI #Agent` | 空格分隔 |
+| 时间间隔 | 60 分钟 | 相邻视频发表间隔 |
+| 起始时间 | 从已发布队列最后时间 + 间隔推算 | 若队列空则询问用户 |
+| 描述格式 | `【{N}】{emoji} {标题}\n{简介}\n{标签}` | N 从 0 或 1 起始 |
+| 起始切片编号 | 从方案的第 1 个开始 | 用户可指定从第 N 个开始发 |
+
+> 发布前必须呈现完整定时发表预览表，让用户确认后再执行。
 
 ---
 
@@ -120,9 +140,22 @@ ffmpeg -version
 
   安装完成后再次执行 `ffmpeg -version` 验证。
 
+### 检查 0.6 — agent-browser 是否安装（视频号发布需要）
+
+```
+which agent-browser && node -e "console.log('ok')"
+```
+
+- **通过** → Phase 0 全部完成
+- **失败** → 安装：
+  ```
+  npm install -g agent-browser
+  agent-browser install
+  ```
+
 **全通过后 Agent 总结：**
 
-> "✅ 环境就绪：bmx ✓ | BiliMix ✓ | 认证 ✓ | 任务 ✓ | FFmpeg ✓ | 开始处理"
+> "✅ 环境就绪：bmx ✓ | BiliMix ✓ | 认证 ✓ | 任务 ✓ | FFmpeg ✓ | agent-browser ✓ | 开始处理"
 
 ---
 
@@ -135,23 +168,37 @@ ffmpeg -version
 | 0.3 | 认证状态 | `bmx auth status` |
 | 0.4 | 选择视频任务 | `bmx task list`（交互式选择） |
 | 0.5 | FFmpeg 安装 | `ffmpeg -version` |
+| 0.6 | agent-browser 安装 | `which agent-browser && node -e "console.log('ok')"` |
 
 **任何一项失败都必须在当前步骤修复后才能继续，不允许跳过。**
 
 ---
 
-## Phase 1: bmx 下载文件
+## Phase 1: 下载文件
 
-根据用户在第 0.4 步选择的 task_id，下载配音视频和字幕：
+根据用户在第 0.4 步选择的 task_id，下载配音视频和字幕。
+
+从 `bmx task result <task_id>` 中提取 basename（如 `audio_xxx_xxx`）。读取 `~/.bilimix/config.json` 获取 server 地址。
+
+**下载 dubbed 视频：** 路径格式为 `/api/audio/{basename}/{basename}_dubbed.mp4`
 
 ```bash
 mkdir -p outputs
-
-bmx video download --task-id <task_id> -o outputs/dubbed_video.mp4
-bmx video download-srt --task-id <task_id> -o outputs/subtitles.ass
+SERVER=$(python3 -c "import json; print(json.load(open('$HOME/.bilimix/config.json'))['server'])")
+curl -L -o outputs/dubbed_video.mp4 "${SERVER}/api/audio/{basename}/{basename}_dubbed.mp4"
 ```
 
-> 若 bmx 无 video 子命令，改用 `python -m bilimix_cli.cli video download --task-id <task_id> -o ...`
+**下载 ASS 字幕：**
+```bash
+curl -L -o outputs/subtitles.ass "${SERVER}/api/audio/{basename}/{basename}.ass"
+```
+
+**下载 dubbed 音频**（备用，用于 FFmpeg 合音轨）：
+```bash
+bmx audio download --task-id <task_id> --type mixed -o outputs/dubbed_audio.mp3
+```
+
+> 若 `_dubbed.mp4` 返回 404，试 `_mixed.mp4` 或从 task list 的 `url` 字段中的原始文件名。
 > 下载时显示进度。完成后确认文件存在且大小正常。
 
 ---
@@ -258,18 +305,196 @@ Agent 输出 Markdown 文件，**仅包含标题 + 副标题 + 表格，不加�
 
 ---
 
-## Phase 5: FFmpeg 切割视频（可选）
+## Phase 5: FFmpeg 切割视频
 
 ```bash
 mkdir -p outputs/clips
 
-# 按 segments.json 中的时间批量切割
-ffmpeg -y -ss 00:00:00 -i video.mp4 -t 149 -c copy -avoid_negative_ts make_zero outputs/clips/clip_001.mp4
-ffmpeg -y -ss 00:02:29 -i video.mp4 -t 331 -c copy -avoid_negative_ts make_zero outputs/clips/clip_002.mp4
+# 按切片方案中的时间批量切割
+ffmpeg -y -ss 00:00:00 -i outputs/dubbed_video.mp4 -t 224 -c copy -avoid_negative_ts make_zero outputs/clips/clip_001.mp4
+ffmpeg -y -ss 00:03:44 -i outputs/dubbed_video.mp4 -t 350 -c copy -avoid_negative_ts make_zero outputs/clips/clip_002.mp4
 # ...
 ```
 
 优先使用 `-c copy` 流复制（无损快切），失败时回退 `-c:v libx264 -c:a aac`。
+验证所有切片文件存在且大小 > 1MB。
+
+---
+
+## Phase 6: 视频号批量定时发布
+
+用户确认发布参数后，通过 agent-browser 自动化 channels.weixin.qq.com 逐个填写表单并定时发表。
+
+> **前置条件**：Phase 0.6 的 agent-browser 已安装，用户已确认发布参数。
+
+### ⚠️ 视频号操作六大原则（吸取自生产环境实战经验）
+
+1. **只用 snapshot + eval，不要依赖截图。** 截图费时且不可靠，用 `snapshot` 读页面文本、用 `snapshot | grep` 提取关键字段、用 `eval` 执行 JS 获取精确值。一切决策基于文本数据，截图仅作辅助确认。
+
+2. **所有表单操作通过 eval 穿透 shadow DOM。** `agent-browser click @ref` 无法穿透 `wujie-app` shadow DOM，会报 "covered by wujie_iframe"。所有点击、赋值用 `eval` 在 `wujie-app.shadowRoot > html > body` 内执行。
+
+3. **file input 先移到 document.body 再 upload。** shadow DOM 内的 `<input type="file">` 对 `agent-browser upload` 不可见。每次上传前：`document.body.appendChild(input)`。
+
+4. **不要让 date picker 悬空。** 改完时间后**立即**点一个安全的 label（如「视频标注」）让 picker 关闭并同步 React state。**绝对不能点「视频管理」标题**——那会触发离开确认弹窗，数��全部丢失。
+
+5. **发表按钮必须 eval 点，不能用 agent-browser click。** 发表按钮被 wujie iframe 覆盖，只能通过 shadow DOM 内的 JS `btn.click()` 触发。
+
+6. **一个 daemon 走到底。** 整个 Phase 6 期间**不要 `agent-browser close`**，保持 daemon 运行使得登录态在所有视频间复用。
+
+### 6.1 登录视频号
+
+```bash
+agent-browser open "https://channels.weixin.qq.com/platform/post/create"
+agent-browser wait --load load
+```
+
+检查是否在登录页：
+```bash
+agent-browser snapshot | grep "微信快捷登录"
+```
+若有，点击登录按钮，等待用户扫码。**首次需要扫码，后续切片复用同一 daemon 的登录态。**
+
+> ⚠️ 整个 Phase 6 期间**不要 `agent-browser close`**——保持 daemon 运行，登录状态才能复用。
+
+### 6.2 逐个切片定时发表
+
+对每个待发布的切片（从用户指定的起始编号开始），按以下步骤操作。
+
+**关键架构知识**：视频号助手使用 wujie 微前端，所有表单元素在 `wujie-app` shadow DOM 内的 `<html> > <body>` 下。`agent-browser click @ref` 不穿透此 shadow DOM，必须用 `eval` 执行 JS。详情参见 `references/wujie-dom.md`。
+
+#### Step a: 进入发表动态页
+
+从首页点击「发表视频」按钮：
+
+```bash
+agent-browser eval "(() => { const wa = document.querySelector('wujie-app'); const body = wa.shadowRoot.querySelector('html').querySelector('body'); const btn = Array.from(body.querySelectorAll('button')).find(b => b.innerText.includes('发表视频')); if (btn) btn.click(); return 'clicked'; })()"
+agent-browser wait 2000
+```
+
+#### Step b: 上传视频
+
+File input 在 shadow DOM 中，agent-browser 无法直接访问。先 appendChild 到 document.body：
+
+```bash
+agent-browser eval "(() => { const wa = document.querySelector('wujie-app'); const body = wa.shadowRoot.querySelector('html').querySelector('body'); const input = body.querySelector('input[type=file]'); document.body.appendChild(input); return 'moved'; })()"
+agent-browser upload "input[type='file']" "/absolute/path/to/outputs/clips/clip_NNN.mp4"
+```
+
+等待上传完成（出现「选择合集」即表示表单就绪）：
+```bash
+agent-browser wait 3000
+agent-browser snapshot | grep "选择合集"
+```
+
+#### Step c: 填写视频描述
+
+描述字段是 `contenteditable=""` div class=`input-editor`。逐行 keyboard.type：
+
+```bash
+agent-browser eval "(() => { const wa = document.querySelector('wujie-app'); const body = wa.shadowRoot.querySelector('html').querySelector('body'); body.querySelector('.input-editor').focus(); return 'focused'; })()"
+agent-browser keyboard type "【{N}】{emoji} {title}"
+agent-browser press Enter
+agent-browser keyboard type "{description text}"
+agent-browser press Enter
+agent-browser keyboard type "{tags}"
+```
+
+#### Step d: 填写短标题
+
+JS 直接设值比 keyboard.type 更快更稳：
+```bash
+agent-browser eval "(() => { const wa = document.querySelector('wujie-app'); const body = wa.shadowRoot.querySelector('html').querySelector('body'); const t = body.querySelector('input[placeholder*=\"短标题\"]'); if (t) { t.focus(); t.value = '{短标题}'; t.dispatchEvent(new Event('input', {bubbles: true})); } return 'done'; })()"
+```
+
+#### Step e: 位置 → 不显示位置
+
+```bash
+agent-browser eval "(() => { const wa = document.querySelector('wujie-app'); const body = wa.shadowRoot.querySelector('html').querySelector('body'); const el = body.querySelector('.post-position-wrap .position-display-wrap'); if (el) el.click(); return 'clicked'; })()"
+agent-browser eval "(() => { const wa = document.querySelector('wujie-app'); const body = wa.shadowRoot.querySelector('html').querySelector('body'); const all = Array.from(body.querySelectorAll('*')); const item = all.find(e => e.innerText && e.innerText.trim() === '不显示位置' && e.children.length < 5); if (item) item.click(); return 'clicked'; })()"
+```
+
+#### Step f: 选择合集
+
+```bash
+agent-browser eval "(() => { const wa = document.querySelector('wujie-app'); const body = wa.shadowRoot.querySelector('html').querySelector('body'); const el = body.querySelector('.post-album-display-wrap'); if (el) el.click(); return 'clicked'; })()"
+agent-browser eval "(() => { const wa = document.querySelector('wujie-app'); const body = wa.shadowRoot.querySelector('html').querySelector('body'); const items = body.querySelectorAll('.option-item'); for (const item of items) { if (item.innerText.includes('{合集名匹配关键词}')) { item.click(); return 'clicked'; } } return 'not found'; })()"
+```
+
+#### Step g: 启用定时发表
+
+```bash
+agent-browser eval "(() => { const wa = document.querySelector('wujie-app'); const body = wa.shadowRoot.querySelector('html').querySelector('body'); const radio = body.querySelectorAll('input[type=radio]')[1]; if (radio) radio.click(); return 'clicked'; })()"
+```
+
+#### Step h: 设置定时时间
+
+Focus 主时间字段打开 ant-design date picker，fill 时间输入框，关闭 picker 提交：
+
+```bash
+# 1. Focus 主时间输入打开 picker
+agent-browser eval "(() => { const wa = document.querySelector('wujie-app'); const body = wa.shadowRoot.querySelector('html').querySelector('body'); const inputs = Array.from(body.querySelectorAll('input')).filter(i => i.value && i.value.includes('2026-')); if (inputs.length > 0) inputs[0].focus(); return 'found'; })()"
+agent-browser wait 1000
+
+# 2. 获取 picker 内时间输入框的 ref
+agent-browser snapshot | grep "textbox.*请选择时间"  # → ref=e66
+
+# 3. 填入时间
+agent-browser fill <ref> "HH:00"
+
+# 4. 关闭 picker（点安全标签如「视频标注」，**千万不要点「视频管理」**）
+agent-browser eval "(() => { const wa = document.querySelector('wujie-app'); const body = wa.shadowRoot.querySelector('html').querySelector('body'); const all = Array.from(body.querySelectorAll('*')); const label = all.find(e => e.innerText && e.innerText.trim() === '视频标注'); if (label) label.click(); return 'clicked'; })()"
+
+# 5. 验证时间同步
+agent-browser snapshot | grep "发表时间" -A 2
+```
+
+**💀 陷阱：** 绝不要点击页面标题"视频管理"来关闭 picker——会触发「将此次编辑保留？」离开确认弹窗，导致数据丢失。
+
+#### Step i: 点击发表
+
+通过 eval 点击（不可用 agent-browser click，被 wujie iframe 遮住）：
+
+```bash
+agent-browser eval "(() => { const wa = document.querySelector('wujie-app'); const body = wa.shadowRoot.querySelector('html').querySelector('body'); const btn = Array.from(body.querySelectorAll('button')).find(b => b.innerText === '发表'); if (btn) { btn.click(); return 'clicked'; } return 'not found'; })()"
+```
+
+#### Step j: 验证发表成功
+
+```bash
+agent-browser wait 2000
+agent-browser snapshot | grep "将于2026年"
+```
+
+看到新的定时条目（`将于2026年0X月XX日 HH:00发表`）即成功。
+
+### 6.3 重复下一个切片
+
+发表成功后页面回到视频列表。回到 Step a 继续下一个切片，将定时时间按间隔递增。
+
+### 6.4 关闭浏览器
+
+全部完成后：
+```bash
+agent-browser close
+```
+
+### 6.5 常见故障速查
+
+| 现象 | 原因 | 处理 |
+|------|------|------|
+| "网络出错，请重新上传" | 上传中断或 session 过期 | 删除错误，重新上传 |
+| "账号已在其他设备登录" 弹窗 | 会话被检测 | `document.querySelector('.login-modal-wrap .close')?.click()` |
+| "将此次编辑保留?" 弹窗 | 误点导航 | 点「不保存」，数据需重新填 |
+| 时间 picker 不提交 | 未正确关闭 | 用「视频标注」label 关闭，不要用其他方式 |
+| agent-browser click 说 covered | wujie iframe 遮挡 | 改用 eval 在 shadow DOM 内 click |
+| file input 找不到 | 在 shadow DOM 里 | 必须先 appendChild 到 document.body |
+| 合集下拉有匹配项但 click 不生效 | 合集名可能有拼写偏差（如 `Agenti` 而非 `Agent`） | 用 `includes()` 模糊匹配而非精确匹配 |
+
+---
+
+## 参考文档
+
+- `references/wujie-dom.md` — 视频号助手 wujie shadow DOM 元素选择器速查表
 
 ---
 
@@ -278,9 +503,9 @@ ffmpeg -y -ss 00:02:29 -i video.mp4 -t 331 -c copy -avoid_negative_ts make_zero 
 ```
 outputs/
 ├── dubbed_video.mp4                       # BiliMix 配音视频
-├── subtitles.ass                          # ASS 双语字幕
-├── segments.json                          # 分段数据（中间产物，可选保留）
+├── subtitles.ass                          # ASS 字幕
+├── transcript.json                        # 解析后的字幕 JSON
 ├── {主题}_短视频切片方案.md                # 最终 Markdown 方案
 └── clips/
-    ├── clip_001.mp4 → clip_012.mp4        # 切片视频
+    ├── clip_001.mp4 → clip_NNN.mp4        # 切片视频
 ```
