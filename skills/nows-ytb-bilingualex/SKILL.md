@@ -41,9 +41,26 @@ python3 <skill>/scripts/check_env.py --env-out yt_env.json
 ```
 
 Installs `yt-dlp` (into an isolated venv if not on PATH) and ensures `ffmpeg`
-exists (for merging video+audio and converting subtitles to .ass). Writes
-`yt_env.json` used by all later scripts. If it exits non-zero, resolve the
-missing binary (hints are printed) before proceeding.
+exists (for merging video+audio). Writes `yt_env.json` used by later scripts.
+If it exits non-zero, resolve the missing binary (hints are printed) before
+proceeding.
+
+**CDP prerequisite (one-time setup):** fetching the official transcript drives
+your REAL Chrome over the DevTools protocol (CDP) — this is what carries your
+YouTube login state and avoids the "confirm you are not a robot" wall that
+blocks headless automation on popular videos. The one-time setup:
+
+1. In your Chrome, open `chrome://inspect/#remote-debugging`.
+2. Check **"Allow remote debugging for this browser instance"** (may require a
+   browser restart; a confirmation dialog may pop up when the proxy connects —
+   click **Allow**).
+3. You must be logged into YouTube in that Chrome (the video must be watchable
+   in your browser without a login wall).
+
+The bundled `scripts/check-deps.sh` verifies the debugging port and the bundled
+`scripts/cdp-proxy.mjs` (Node 22+, native WebSocket, no npm deps) provides the
+HTTP API. `fetch_transcript.py` starts/attaches the proxy automatically. The
+proxy keeps running on `127.0.0.1:3456` so later runs reuse it.
 
 ### Step 1 — Ask the user for video quality (interactive)
 
@@ -82,8 +99,8 @@ download: yt-dlp fetches the pre-aggregation rolling-window captions, which are
 fragmented half-sentences with ~98% overlapping windows — they look wrong in
 any ASS renderer and break lip-sync perception.
 
-Fetch the transcript with the bundled script (drives a real browser via
-agent-browser, so YouTube's IP/cookie blocks don't apply):
+Fetch the transcript with the bundled script. It drives the user's real Chrome
+through the bundled CDP proxy (no agent-browser, no external services):
 
 ```bash
 python3 <skill>/scripts/fetch_transcript.py \
@@ -91,21 +108,39 @@ python3 <skill>/scripts/fetch_transcript.py \
     --out transcript_official.srt
 ```
 
-It opens the video page, expands the description, clicks "内容转文字" (Show
-transcript), reads the panel's innerText (each block: `M:SS` timestamp +
-`X分钟Y秒钟` duration hint + sentence text), and writes an SRT (segment end =
-next segment start; last segment +3s). Then proceed to Step 3 with that SRT.
+What it does, automatically:
+- Ensures the CDP proxy (`scripts/cdp-proxy.mjs`) is connected to the user's
+  Chrome (exits `2` with setup hints if remote debugging isn't enabled).
+- Opens the video page in a **background tab** (the user's own tabs are never
+  touched), expands the description, clicks "内容转文字" (Show transcript),
+  waits for the panel to render, reads its innerText, and writes an SRT
+  (segment end = next segment start; last segment +3s).
+- Parses the panel text with an English + monotonic-timestamp filter, which
+  drops the recommended-video noise appended at the bottom.
+- Closes the background tab when done.
 
-What the download step does, automatically:
-- Probes metadata via `yt-dlp -J` to get the title (for file naming).
-- **Auth reuse:** video download uses `--cookies-from-browser chrome` (reuses the
-  user's logged-in Chrome session for member-only / age-restricted videos).
-- Downloads the video merged into MP4 at the chosen quality.
-- Writes `manifest.json` (title, paths) for later steps.
+If the script exits `2` (CDP not ready), give the user the one-time setup
+instructions from Step 0. If it exits `1` (transcript not retrievable) and a
+"confirm you are not a robot" wall appears, make sure the user is logged into
+YouTube in Chrome, then retry. **Never silently fall back to raw captions.**
 
-If the MP4 download fails, surface the yt-dlp error. If the transcript cannot be
-retrieved (browser automation issue), stop and report — do not silently fall
-back to raw captions.
+Then download the MP4 at the chosen quality:
+
+```bash
+python3 <skill>/scripts/download.py \
+    --url "<youtube_url>" \
+    --quality best \
+    --cookies-browser chrome \
+    --lang en \
+    --output . \
+    --env-out yt_env.json
+```
+
+`download.py` now downloads the video **only** (no subtitle track): it probes
+metadata via `yt-dlp -J` for the title, downloads the MP4 merged at the chosen
+quality using `--cookies-from-browser chrome` (auth reuse for member-only /
+age-restricted videos), and writes `manifest.json` (title, paths) for later
+steps. If the MP4 download fails, surface the yt-dlp error.
 
 ### Step 3 — Parse subtitle into a translation work file
 
@@ -230,9 +265,12 @@ English is in the `.ass`).
 
 ### scripts/
 - `check_env.py` — probe/install yt-dlp + ffmpeg; write `yt_env.json`
-- `fetch_transcript.py` — fetch YouTube's official transcript (转写文稿) via
-  agent-browser and write it as SRT (sentence-aggregated, non-overlapping)
-- `download.py` — metadata probe, auth reuse, quality select, MP4 download
+- `check-deps.sh` — verify Chrome remote-debugging (DevToolsActivePort / 9222)
+- `cdp-proxy.mjs` — bundled CDP proxy (Node 22+, native WebSocket, no npm deps);
+  exposes HTTP API on `127.0.0.1:3456` to drive the user's real Chrome
+- `fetch_transcript.py` — fetch YouTube's official transcript (转写文稿) via the
+  bundled CDP proxy and write it as SRT (sentence-aggregated, non-overlapping)
+- `download.py` — metadata probe, auth reuse, quality select, MP4 download only
 - `split_translation.py` — parse SRT/ASS → transcript + chunks + manifest
 - `assemble_final.py` — merge translated chunks → bilingual .ass + validation
 - `deoverlap.py` — (rare) give windowless lines a minimum visible window; NEVER
