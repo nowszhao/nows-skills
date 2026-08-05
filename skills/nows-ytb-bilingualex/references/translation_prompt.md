@@ -58,6 +58,51 @@
    - 若某句英文为空或只是语气词（"uh"、"hmm"），中文可译为"嗯""呃"等对应语气词，
      保持该行存在，不得删除。
 
+## TTS 净化与纠错补充规范（真实项目实测沉淀）
+
+以下规则来自实际交付 review 的经验，违反会直接损害配音效果，优先级等同格式硬规则：
+
+1. **舞台指示必须删除（TTS 会把它们念出来）。**
+   YouTube ASR 转写会自动标注 `[cheering]` `[applause]` `[laughter]`（中文侧常译作"（欢呼声）（掌声）（笑声）"）。
+   这些不是台词，配音合成时会原样朗读，极其违和。出现时：
+   - 英文列删除 `[xxx]` 标注，中文列删除"（xxx）"标注；
+   - 若整行只有标注没有台词，中文保留一个自然的语气词或不留（该行仍需存在，行数 1:1）；
+   - 中英两侧必须同步清理，不得只删一侧。
+
+2. **章节标题混入必须识别。**
+   转写面板的章节小标题（如 "Earnestness, Ambition, and Ignoring the Haters"、"It's All Going to Work Out"）
+   可能被当正文抓入句尾，翻译时删除，不要让句尾出现突兀的短语。
+   ⚠️ 例外：若标题是台词中引用的真实内容——例如主持人引用他人演讲的题目
+   （"I was hearing 'Why Startups Win During Technology Shifts'"）——这是台词本身，必须保留并译出。
+
+3. **ASR 纠错要全面，不只是同音词。** 常见实测错误模式：
+   - 人名/品牌名：Sam Alman→Sam Altman、Peter Keel→Peter Thiel、ChachiBT→ChatGPT、Looped→Loopt、codeex→codex；
+   - 指人误用 which→who（"join Stripe, who is Greg Brockman"）；
+   - 整段乱码需按语义重建：如 "What are they claim What What's the claim blog?" → "What are they claiming? What's the claim, blah?"；
+   - 同一人名多处出现拼写必须统一（如 Run's / Rune → 统一 Rune's / Rune）；
+   - 多余冠词/噪音词：a 100,000→100,000、"um be because"→"Um, because"；
+   - 数字表达：six and a half years ago→"六年半前"（勿译"六年前半"）；the late 2000s→"2000 年代后期"；'98/'99→"一九九八、一九九九年"。
+   纠错后的英文写入"修正后的英文"列，中文基于修正后的英文翻译。
+
+4. **TTS 禁止拆词断句。** 中文一行内不允许把词拆成两半（如"就是十 / 年后的我们"、"非常陡峭的—— / 上升期"）。
+   跨行悬空时在行内重排语义（如把"却"拆到下一行、把时间短语整放一行），保证每一行单独朗读也是自然的句子。
+   允许中文断句不对齐英文（中文字幕不必逐词对应），但行数仍须 1:1。
+
+5. **人称全程统一。** 访谈类字幕先判断谈话双方关系（主持人称受访者通常用"你"而非"您"），全片保持一致；
+   交付前全文搜索"您"核对是否混入。
+
+6. **翻译腔高频模式自查**（出现即改）：
+   - "难以置信地X"（unbelievably X）→ "X得难以置信"；
+   - "出了名地X" → "出了名的X"；
+   - 直译比喻要本地化："minor leagues"（棒球隐喻）→ "小打小闹"；
+   - "this kind of a shape" 直译"这种形状的" → "这种类型的"。
+
+7. **术语排版**：英文术语与中文之间加空格（token / AI / OpenAI / YC / ChatGPT / API / 640K / 17 分钟），
+   全片一致；人名首次出现可用通行译名+原文，如"格雷格·布罗克曼（Greg Brockman）"。
+
+8. **交付前自查清单**：grep 舞台指示（cheering/applause/laughter/欢呼声/掌声/笑声）应为 0；
+   检查"您"混用；抽查 3-5 处跨行断句是否拆词。
+
 ## 输出示例
 
 输入行：

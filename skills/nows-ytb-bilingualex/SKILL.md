@@ -186,6 +186,9 @@ subagents when available):
    - Keep `<idx>`, `<start>`, `<end>` byte-identical; **never touch timestamps**.
    - Same number of output lines as input; 1:1 mapping.
    - Never translate or echo the `#` context lines.
+   - **TTS 净化（实测强制项）**：删除舞台指示（`[cheering]`/`[applause]`/`[laughter]` 及其中译"（欢呼声）"等，TTS 会照读）；
+     识别并删除混入句尾的章节标题（但台词中真实引用的演讲/书名保留）；行内不拆词断句；全片人称统一（访谈用"你"不用"您"）；
+     全面 ASR 纠错（人名/品牌/which→who/乱码重建/拼写统一）。详见 `translation_prompt.md` 的"TTS 净化与纠错补充规范"。
 3. Write the result to `parts/trans_NN.txt` in format
    `<idx>\t<start>\t<end>\t<corrected EN>\t<ZH>` (UTF-8).
 
@@ -260,6 +263,10 @@ English is in the `.ass`).
   lip-sync.
 - **Translation is the Agent's job, mechanics are the scripts' job.** Do not
   hand-write parsing/assembly logic that already exists in `scripts/`.
+- **Delivered .ass is TTS-safe:** stage directions (`[cheering]` `[applause]`
+  `[laughter]` → "（欢呼声）" etc.), leaked chapter headings, and mid-word
+  line breaks must be cleaned during translation — the .ass contains only
+  spoken lines a voice synthesizer can read aloud.
 
 ## Resources
 
