@@ -79,15 +79,25 @@ recommend 720p.
 
 ### Step 2 — Download MP4 + original subtitle
 
+**先并行启动 MP4 下载（后台），再获取转写——两者互不依赖。** 用户选定质量后立即启动
+下载，让它在转写获取/翻译期间并行完成：
+
 ```bash
+# 后台启动（run_in_background），输出重定向到 download.log
 python3 <skill>/scripts/download.py \
     --url "<youtube_url>" \
     --quality best \
     --cookies-browser chrome \
-    --lang en \
     --output . \
-    --env-out yt_env.json
+    --env-out yt_env.json > download.log 2>&1
 ```
+
+> ⚠️ **启动后 3–5 秒必须检查 `download.log`**，确认出现 `[download]` 进度输出——
+> 防止参数错误/环境问题导致下载**静默失败**（曾发生：进程秒退，直到最后交付才发现没
+> 下载，白白丢失并行窗口）。若日志只有 usage/error，立即修复重跑。
+>
+> 注意：`download.py` **不接受** `--lang` 参数（历史版本文档含此参数会报
+> `unrecognized arguments`）。字幕仅通过官方转写文稿获取，与 MP4 下载无关。
 
 **Subtitle source policy — official transcript only, no fallback:**
 The bilingual subtitle MUST be built from YouTube's official **transcript
@@ -113,10 +123,23 @@ What it does, automatically:
   Chrome (exits `2` with setup hints if remote debugging isn't enabled).
 - Opens the video page in a **background tab** (the user's own tabs are never
   touched), expands the description, clicks "内容转文字" (Show transcript),
-  waits for the panel to render, reads its innerText, and writes an SRT
-  (segment end = next segment start; last segment +3s).
-- Parses the panel text with an English + monotonic-timestamp filter, which
-  drops the recommended-video noise appended at the bottom.
+  **polls up to 90s** (current layout takes ~30–40s to render segments) for
+  `ytd-transcript-segment-renderer` elements (with legacy-renderer and
+  timestamp-scan fallbacks), reads their text, and writes an SRT.
+  ⚠️ **Do NOT click the "转写文稿" tab** — that puts the panel into a spinner
+  state where segments never render (observed repeatedly). The button's own
+  command already selects the transcript tab.
+- Parses the panel text with an English + monotonic-timestamp filter: the
+  monotonic check also drops a **duplicate second pass** (the panel sometimes
+  re-renders, doubling every segment — e.g. 861 → 1722; the jump back to 0:00
+  stops parsing). Timestamps support both `M:SS` and `H:MM:SS` (videos > 1h).
+- **Timedtext fallback (auto)**: if the panel hangs (spinner — the get_transcript
+  API is IP-blocked, `400 Precondition check failed`), the frontend still issues
+  a `/api/timedtext` request whose URL lands in the Performance API. The script
+  fetches it, aggregates the rolling-window segments into ~6s sentences (exactly
+  what the panel displays — verified: the panel's data source IS timedtext, no
+  get_transcript call is made), and writes the SRT. Sentences are a bit longer
+  than the DOM version but still aligned to the audio and non-overlapping.
 - Closes the background tab when done.
 
 If the script exits `2` (CDP not ready), give the user the one-time setup
@@ -124,19 +147,23 @@ instructions from Step 0. If it exits `1` (transcript not retrievable) and a
 "confirm you are not a robot" wall appears, make sure the user is logged into
 YouTube in Chrome, then retry. **Never silently fall back to raw captions.**
 
-Then download the MP4 at the chosen quality:
+> **IP 风控提示（实测）**：数据中心 IP 上 `get_transcript` API 会被拒绝
+> （`400 Precondition check failed`，而 `player`/`next` 正常）。**不要浪费时间在
+> API 参数/context/客户端变体上排查**——本脚本走 DOM 渲染路径，不受该风控影响；
+> 转写段落通常会在 ~40s 内渲染出来，重试一次即可。
+
+Then download the MP4 at the chosen quality (if not already running):
 
 ```bash
 python3 <skill>/scripts/download.py \
     --url "<youtube_url>" \
     --quality best \
     --cookies-browser chrome \
-    --lang en \
     --output . \
     --env-out yt_env.json
 ```
 
-`download.py` now downloads the video **only** (no subtitle track): it probes
+`download.py` downloads the video **only** (no subtitle track): it probes
 metadata via `yt-dlp -J` for the title, downloads the MP4 merged at the chosen
 quality using `--cookies-from-browser chrome` (auth reuse for member-only /
 age-restricted videos), and writes `manifest.json` (title, paths) for later
@@ -172,8 +199,17 @@ translation, more passes).
 This is the only intelligence step and it is deliberately model-agnostic: any
 Agent with any built-in model can execute it.
 
-For each chunk `parts/part_NN.txt` (sequential, or parallel with separate
-subagents when available):
+**并行策略（实测优化，省 ~30% 翻译耗时）：**
+
+- 每个 subagent 处理 **2 个分块**（25 块 → 13 个 agent，分 2 批并行；3 块/agent 完成率
+  明显下降，曾出现部分 agent 只写了一半文件）。
+- **每个 agent 返回后立即验证** `trans_NN.txt` 行数是否等于输入行数（缺失的当场重派，
+  **不要等全部返回后才验证**——实测全量验证后再补齐会白白串行 3–5 分钟）。
+- subagent prompt 必须要求**完成后返回输出行数**，便于立即核对。
+- 全部批次结束后再做一次全量校验：总行数 = 70×(N-1) + 尾块行数。
+
+For each chunk `parts/part_NN.txt` (parallel with separate subagents, 2 per
+agent):
 
 1. Read the instructions in `<skill>/references/translation_prompt.md`.
 2. **Read the chunk's context header first** (GLOBAL CONTEXT + PREVIOUS CHUNK)

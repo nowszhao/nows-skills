@@ -197,18 +197,21 @@ def find_and_click(port: int, target: str, js_selector_script: str, sleep_after:
 # ---------------- transcript parsing ----------------
 
 def parse_transcript(text: str) -> list[tuple[str, str]]:
-    """Parse panel innerText into [(M:SS timestamp, sentence), ...].
+    """Parse panel innerText into [(timestamp, sentence), ...].
 
     Structure per block (as rendered by YouTube's transcript panel):
         <chapter heading>          (optional, skipped)
-        M:SS                       (timestamp, e.g. 0:16 / 17:46)
+        M:SS | H:MM:SS             (timestamp, e.g. 0:16 / 17:46 / 1:30:14)
         <sentence text>            (one or more lines)
     The panel may be followed by recommended-video noise (Chinese titles,
     viewer counts, etc.) — filter with an English-text heuristic and require
     timestamps to be monotonic (time going backwards = left the transcript).
+    The monotonic check (break on a jump backwards >60s) also drops the
+    duplicate second pass when the panel re-renders (observed: 861 segments
+    rendered twice -> 1722; the jump back to 0:00 stops parsing).
     """
     lines = text.split("\n")
-    TS_RE = re.compile(r"^(\d+):(\d{2})$")
+    TS_RE = re.compile(r"^(\d+):(\d{2})(?::(\d{2}))?$")  # M:SS or H:MM:SS
     DUR_RE = re.compile(r"^\d+分钟\d+秒钟$|^\d+秒钟$|^\d+分钟$")
 
     def is_english(s: str) -> bool:
@@ -246,7 +249,11 @@ def parse_transcript(text: str) -> list[tuple[str, str]]:
             continue
         m = TS_RE.match(ln)
         if m:
-            sec = int(m.group(1)) * 60 + int(m.group(2))
+            h = int(m.group(1))
+            if m.group(3) is not None:      # H:MM:SS
+                sec = h * 3600 + int(m.group(2)) * 60 + int(m.group(3))
+            else:                            # M:SS
+                sec = h * 60 + int(m.group(2))
             # time jumping backwards by >60s means we've left the transcript
             if sec < last_sec - 60:
                 break
@@ -264,8 +271,10 @@ def parse_transcript(text: str) -> list[tuple[str, str]]:
 
 
 def ts_to_sec(ts: str) -> int:
-    m, s = ts.split(":")
-    return int(m) * 60 + int(s)
+    parts = ts.split(":")
+    if len(parts) == 3:                      # H:MM:SS
+        return int(parts[0]) * 3600 + int(parts[1]) * 60 + int(parts[2])
+    return int(parts[0]) * 60 + int(parts[1])
 
 
 def fmt_srt(sec: int) -> str:
@@ -290,6 +299,95 @@ def to_srt(segments: list[tuple[str, str]]) -> str:
     for i, (start, end, sentence) in enumerate(blocks, 1):
         out.append(f"{i}\n{fmt_srt(start)} --> {fmt_srt(end)}\n{sentence}\n")
     return "\n".join(out) + "\n"
+
+
+def fetch_timedtext_fallback(port: int, target: str, max_wait: int = 15) -> str | None:
+    """Recover the transcript when the panel hangs (spinner) — e.g. the
+    get_transcript API is IP-blocked (400 Precondition check failed).
+
+    The frontend still issues a /api/timedtext request when "内容转文字" is
+    clicked; its URL shows up in the Performance API. Fetch it (valid signature,
+    same login session), aggregate the rolling-window segments into ~6s
+    sentences (this is exactly what the transcript panel displays), return SRT.
+    """
+    try:
+        url = _eval(port, target,
+            "(() => { const r = performance.getEntriesByType('resource').map(x => x.name); "
+            "const u = r.find(n => n.includes('timedtext')); return u || ''; })()")
+        if not url or not isinstance(url, str):
+            log("  [timedtext fallback] no timedtext URL in performance entries")
+            return None
+        # kick off the fetch (fire-and-forget), store result on window.__ttFallback
+        _eval(port, target,
+            "fetch(%s).then(r => r.text()).then(t => { window.__ttFallback = t; })"
+            " .catch(() => { window.__ttFallback = ''; }); 'ok'" % json.dumps(url))
+        deadline = time.time() + max_wait
+        while time.time() < deadline:
+            ready = _eval(port, target, "typeof window.__ttFallback !== 'undefined' ? 'yes' : 'no'")
+            if ready == "yes":
+                break
+            time.sleep(1)
+        total = ""
+        offset = 0
+        while True:
+            chunk = _eval(port, target, f"window.__ttFallback.substr({offset}, 150000)")
+            if not chunk or not isinstance(chunk, str):
+                break
+            total += chunk
+            offset += len(chunk)
+            if len(chunk) < 150000:
+                break
+        if not total or len(total) < 1000:
+            log(f"  [timedtext fallback] empty response ({len(total)} chars)")
+            return None
+        try:
+            data = json.loads(total)
+        except Exception:
+            log("  [timedtext fallback] response is not JSON")
+            return None
+        events = data.get("events", [])
+        texts = []
+        for e in events:
+            segs = e.get("segs") or []
+            t = "".join(s.get("utf8", "") for s in segs)
+            if t.strip():
+                texts.append((e.get("tStartMs", 0), t))
+        if len(texts) < 10:
+            log(f"  [timedtext fallback] too few text events ({len(texts)})")
+            return None
+        # aggregate: ~6s window starting at each sentence's first event
+        W = 6000
+        sentences: list[tuple[int, str]] = []
+        i = 0
+        while i < len(texts):
+            cur = texts[i][0]
+            window_end = cur + W
+            parts = []
+            while i < len(texts) and texts[i][0] < window_end:
+                t = re.sub(r">>\s*", "", texts[i][1])
+                t = re.sub(r"\s+", " ", t).strip()
+                if t:
+                    parts.append(t)
+                i += 1
+            if parts:
+                sentences.append((cur, " ".join(parts)))
+        if not sentences:
+            log("  [timedtext fallback] aggregation produced nothing")
+            return None
+        log(f"  [timedtext fallback] aggregated {len(sentences)} sentences from {len(texts)} events")
+        blocks = []
+        for idx, (start, sent) in enumerate(sentences):
+            end = sentences[idx + 1][0] if idx + 1 < len(sentences) else start + 3000
+            if end <= start:
+                end = start + 2000
+            blocks.append((start, end, sent))
+        out = []
+        for idx, (start, end, sent) in enumerate(blocks, 1):
+            out.append(f"{idx}\n{fmt_srt(start // 1000)} --> {fmt_srt(end // 1000)}\n{sent}\n")
+        return "\n".join(out) + "\n"
+    except Exception as e:
+        log(f"  [timedtext fallback] error: {e}")
+        return None
 
 
 # ---------------- main ----------------
@@ -355,7 +453,12 @@ def main() -> int:
             sleep_after=1.5,
         )
 
-        # 3. click "内容转文字" / "Show transcript" (the description-area button)
+        # 3. click "内容转文字" / "Show transcript" (the description-area button).
+        #    IMPORTANT: do NOT additionally click the "转写文稿" tab afterwards —
+        #    that puts the panel into a spinner state where segments NEVER render
+        #    (observed repeatedly). The button's own command already selects the
+        #    transcript tab; segments render ~30-40s after this single click, and
+        #    the poll loop below waits for them.
         find_and_click(
             args.proxy_port, target,
             """(() => {
@@ -370,35 +473,26 @@ def main() -> int:
             sleep_after=5,
         )
 
-        # 4. activate the "转写文稿" tab inside the "在此视频中" tab bar
-        #    (some videos render the transcript inside a tab rather than the
-        #     description panel)
-        find_and_click(
-            args.proxy_port, target,
-            """(() => {
-                const tabs = [...document.querySelectorAll('yt-tab-shape, [role=tab], button, tp-yt-paper-tab')];
-                const t = tabs.find(x => (x.textContent||'').trim() === '转写文稿'
-                    || (x.textContent||'').trim() === 'Transcript');
-                if (t) { t.click(); return 'clicked transcript tab'; }
-                return 'no transcript tab';
-            })()""",
-            sleep_after=2,
-        )
-
-        # 5. wait for the transcript panel to render — YouTube often loads
-        #    the segments lazily after the tab is shown.
-        time.sleep(10)
+        # 4. wait for the transcript panel to render — YouTube often loads
+        #    the segments lazily after the button is clicked (current layout
+        #    takes ~30-40s; the poll loop below handles the wait).
+        time.sleep(3)
 
         # 6. find the best candidate panel (transcript segments — many
         #    timestamps + real English sentences) anywhere in the document
-        #    including shadow roots. Some YouTube layouts render the
-        #    transcript inside <ytd-transcript-segment-list-renderer> in a
-        #    shadow tree, or as button labels (virtual-scroll scroller).
-        # 6. find the transcript panel. YouTube renders the actual segments
-        #    into one of three places; pick the first with content.
+        #    including shadow roots. Priority:
+        #    1) ytd-transcript-segment-renderer elements (current layout —
+        #       the transcript renders inside ytd-engagement-panel-section-list-renderer)
+        #    2) the legacy renderers checked below
+        #    3) fallback: scan any element with 20+ timestamps
         js_find = (
             "(() => {"
             " const tsRE = /[0-9]+:[0-9]{2}/g;"
+            " const segs = [...document.querySelectorAll('ytd-transcript-segment-renderer')];"
+            " if (segs.length >= 20) {"
+            "   window.__ytTrans = segs.map(el => (el.innerText || '').trim()).join('\\n');"
+            "   return JSON.stringify({found: true, chars: window.__ytTrans.length, ts: segs.length, src: 'ytd-transcript-segment-renderer'});"
+            " }"
             " const checks = ['ytd-transcript-segment-list-renderer', 'ytd-transcript-search-panel-renderer', 'ytd-transcript-renderer', 'ytd-video-description-transcript-section-renderer', '.ytSectionListRendererContents'];"
             " for (const sel of checks) {"
             "   let el = null;"
@@ -412,7 +506,16 @@ def main() -> int:
             "   window.__ytTrans = t;"
             "   return JSON.stringify({found: true, chars: t.length, ts, src: sel});"
             " }"
-            " return JSON.stringify({found: false});"
+            " let best = null;"
+            " for (const el of document.querySelectorAll('div, yt-formatted-string, span')) {"
+            "   let t = '';"
+            "   try { t = (el.innerText || '').trim(); } catch (_) { continue; }"
+            "   if (t.length < 8000) continue;"
+            "   const ts = (t.match(tsRE) || []).length;"
+            "   if (ts >= 80 && (!best || ts > best.ts)) best = {el, chars: t.length, ts};"
+            " }"
+            " if (best) { window.__ytTrans = best.el.innerText; return JSON.stringify({found: true, chars: best.chars, ts: best.ts, src: 'fallback-scan'}); }"
+            " return JSON.stringify({found: false, segCount: segs.length});"
             " })()"
         )
         # Read the stored transcript in chunks of ~15k chars. CDP can
@@ -425,7 +528,8 @@ def main() -> int:
         )
 
         text = ""
-        for attempt in range(8):
+        MAX_ATTEMPTS = 18  # 18 x 5s = 90s; current layout takes ~30-40s to render segments
+        for attempt in range(MAX_ATTEMPTS):
             find_raw = _eval(args.proxy_port, target, js_find)
             if attempt == 0:
                 log(f"js_find raw: {repr(find_raw)[:200]}")
@@ -448,13 +552,37 @@ def main() -> int:
                 text = "".join(chunks)
                 if text and len(text.strip()) >= 500:
                     break
-            log(f"  waiting for transcript panel (attempt {attempt+1}/8, "
+            log(f"  waiting for transcript panel (attempt {attempt+1}/{MAX_ATTEMPTS}, "
                 f"chars={len(text.strip())}, {find_info})")
-            time.sleep(10)
+            time.sleep(5)
         if len(text.strip()) < 300:
             log("Transcript panel appears empty (or not rendered).")
+            # FALLBACK: the frontend still issues a /api/timedtext request even
+            # when the panel hangs (its URL lands in the Performance API). Fetch
+            # it and aggregate the rolling-window segments into ~6s sentences —
+            # this bypasses the get_transcript IP-block entirely.
+            srt = fetch_timedtext_fallback(args.proxy_port, target)
+            if srt:
+                with open(args.out, "w", encoding="utf-8") as f:
+                    f.write(srt)
+                log(f"FALLBACK: aggregated timedtext -> {args.out}")
+                return 0
+            try:
+                diag = _eval(args.proxy_port, target,
+                    "(() => { const tsRE = /[0-9]+:[0-9]{2}/g; const out = []; "
+                    "for (const el of document.querySelectorAll('ytd-transcript-segment-renderer, ytd-engagement-panel-section-list-renderer, div')) { "
+                    "  let t=''; try { t=(el.innerText||'').trim(); } catch(_) {continue;} "
+                    "  const ts=(t.match(tsRE)||[]).length; "
+                    "  if (t.length>=100) out.push({tag: el.tagName, cls: (el.className||'').toString().slice(0,50), chars: t.length, ts}); "
+                    "} out.sort((a,b)=>b.ts-a.ts); return JSON.stringify(out.slice(0,8)); })()")
+                log(f"  candidates: {str(diag)[:300]}")
+            except Exception:
+                pass
             log("  If you see a 'confirm you are not a robot' wall, make sure you are")
             log("  logged into YouTube in your Chrome, then retry.")
+            log("  If the panel shows a spinner that never resolves, the get_transcript API is likely")
+            log("  IP-blocked (400 Precondition check failed) — the timedtext fallback above")
+            log("  usually recovers the transcript; if it also failed, retry once.")
             return 1
         log(f"Read {len(text)} chars from transcript panel")
 
