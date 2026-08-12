@@ -5,10 +5,12 @@ bundled CDP Proxy that drives the user's real Chrome (login state included),
 then convert it to SRT.
 
 Why CDP instead of agent-browser / youtube-transcript-api:
-  - YouTube's official transcript is the server-side sentence-aggregated version
-    (complete sentences, non-overlapping timestamps, start == true speech onset).
-    yt-dlp's raw caption download is the pre-aggregation rolling window
-    (fragments, ~98% overlapping) and must NOT be used.
+  - YouTube's official transcript is the 转写文稿 panel data. The panel renders
+    rolling-window fragments (observed 2026-08; NOT the old sentence-aggregated
+    version), so the output SRT is fragmented — run aggregate_srt.py afterwards
+    to merge into sentence-level SRT.
+    yt-dlp's raw caption download is the same rolling window and must NOT be
+    used as the pipeline source.
   - youtube-transcript-api is frequently IP-blocked even with cookies.
   - A headless automated browser (agent-browser / Playwright default profile)
     triggers the "请登录确认你不是机器人" (bot-check) wall on popular videos.
@@ -19,14 +21,15 @@ Why CDP instead of agent-browser / youtube-transcript-api:
 Workflow:
   1. ensure the CDP proxy is running and connected to the user's Chrome
      (one-time setup: chrome://inspect/#remote-debugging -> allow; see SKILL.md)
-  2. open the video page in a background tab
+  2. reuse an EXISTING tab on the same watch URL if present (bg tabs may render
+     the transcript button invisible), else open a background tab
   3. expand the description ("更多"), click "内容转文字" / "Show transcript"
   4. wait for the transcript panel to render, then read its innerText
      (each block: `M:SS` timestamp + sentence text; may include a duration hint
      like `X分钟Y秒钟`; recommended-video noise may be appended at the end)
   5. parse into segments (English-only filter + monotonic timestamps), convert
      to SRT (segment end = next segment start; last segment +3s)
-  6. close the background tab
+  6. close the background tab ONLY if we created it (reused tabs are left alone)
 
 Usage:
     python3 fetch_transcript.py --url <youtube_url> [--out transcript_official.srt]
@@ -165,12 +168,29 @@ def check_chrome_debug() -> bool:
 
 # ---------------- page automation ----------------
 
-def open_video(port: int, url: str) -> str:
+def open_video(port: int, url: str) -> tuple[str, bool]:
+    """Return (target_id, created_by_us). Prefer an EXISTING tab on the same
+    watch URL: CDP-created background tabs can render the transcript button
+    with rect 0x0 (invisible) and clicks on it never trigger the panel — while
+    the user's own tab renders it visible and works (get_transcript 400 / empty
+    panel observed on bg tabs). created_by_us=False means the caller must NOT
+    close the tab (it's the user's)."""
+    try:
+        targets = json.loads(_http_get(port, "/targets", timeout=10))
+        for t in targets:
+            if t.get("type") == "page":
+                tu = t.get("url", "")
+                # match the watch URL ignoring extra params (e.g. &pp, &t=)
+                if url.split("&")[0] in tu.split("&")[0] and "watch" in tu:
+                    log(f"Reusing existing tab ({tu[:80]})")
+                    return t.get("targetId", ""), False
+    except Exception:
+        pass
     raw = _http_get(port, f"/new?url={urllib.parse.quote(url, safe='')}", timeout=30)
     try:
-        return json.loads(raw).get("targetId", "")
+        return json.loads(raw).get("targetId", ""), True
     except Exception:
-        return ""
+        return "", True
 
 
 def wait_for_target(port: int, target: str, timeout: int = 60) -> bool:
@@ -413,9 +433,10 @@ def main() -> int:
         return 2
 
     target = ""
+    tab_created = True
     try:
         log(f"Opening {args.url}")
-        target = open_video(args.proxy_port, args.url)
+        target, tab_created = open_video(args.proxy_port, args.url)
         if not target:
             log("Failed to create a browser tab.")
             return 1
@@ -463,12 +484,16 @@ def main() -> int:
             args.proxy_port, target,
             """(() => {
                 const btns = [...document.querySelectorAll('button')];
-                const b = btns.find(x => {
+                const cand = btns.filter(x => {
                     const t = (x.textContent||'');
                     return t.includes('内容转文字') || t.includes('Show transcript') || t.includes('Transcript');
                 });
-                if (b) { b.click(); return 'clicked transcript btn'; }
-                return 'no transcript btn';
+                if (!cand.length) return 'no transcript btn';
+                // prefer a VISIBLE instance (bg tabs may hold invisible duplicates with rect 0x0)
+                const b = cand.find(x => x.offsetParent !== null) || cand[0];
+                b.scrollIntoView({block:'center'});
+                b.click();
+                return 'clicked transcript btn';
             })()""",
             sleep_after=5,
         )
@@ -602,7 +627,8 @@ def main() -> int:
         return 1
 
     finally:
-        if target:
+        # Only close a tab WE created — never the user's own reused tab.
+        if target and tab_created:
             try:
                 _http_get(args.proxy_port, f"/close?target={target}", timeout=5)
                 log("Closed the background tab")
