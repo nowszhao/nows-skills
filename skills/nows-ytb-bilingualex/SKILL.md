@@ -1,6 +1,6 @@
 ---
 name: nows-ytb-bilingualex
-description: "This skill should be used when the user gives a YouTube video URL and wants (1) the video downloaded as an MP4 file and (2) a bilingual English || Chinese .ass subtitle file for that video. It downloads the ORIGINAL-language subtitle (preferring the creator's manual captions, falling back to YouTube's auto-generated ASR — never YouTube's machine translation), translates it into natural, context-aware, voice-synthesis-ready Chinese using the Agent's built-in model, and assembles a line-by-line bilingual .ass that keeps the original timestamps. It reuses the browser login session (Chrome cookies) so member-only / age-restricted videos can still be fetched. Do not use for plain subtitle translation of files the user already has — use youtube-subtitle-cleaner for cleaning messy .ass files."
+description: "This skill should be used when the user gives a YouTube video URL and wants (1) the video downloaded as an MP4 file and (2) a bilingual English || Chinese .ass subtitle file for that video. The subtitle is built from YouTube's official auto-generated ASR (timedtext — the SAME underlying data the video page's 转写文稿/transcript panel displays), aggregated into sentence-level, non-overlapping lines, translated into natural, context-aware, voice-synthesis-ready Chinese using the Agent's built-in model, and assembled into a line-by-line bilingual .ass that keeps the original start timestamps. It reuses the browser login session (Chrome cookies) so member-only / age-restricted videos can still be fetched. Do not use for plain subtitle translation of files the user already has — use youtube-subtitle-cleaner for cleaning messy .ass files."
 agent_created: true
 ---
 
@@ -9,14 +9,14 @@ agent_created: true
 Turn a YouTube URL into two deliverables:
 1. **MP4** — the video, at a quality the user chooses interactively.
 2. **Bilingual .ass subtitle** — every Dialogue line is `English || Chinese`,
-   timestamps taken verbatim from the original subtitle track. The .ass file is
-   written with the **same base name as the MP4** (e.g. `Talk.mp4` → `Talk.ass`)
-   so the pair stays matched in a media library.
+   timestamps taken from the aggregated transcript. The .ass file is written
+   with the **same base name as the MP4** (e.g. `Talk.mp4` → `Talk.ass`) so the
+   pair stays matched in a media library.
 
 The pipeline is deliberately scripted end-to-end so no step requires
-exploration: environment setup, auth reuse, downloading, parsing, splitting,
-assembly, and validation are all deterministic scripts. The only step that uses
-the Agent's own intelligence is the translation itself.
+exploration: environment setup, auth reuse, downloading, parsing, aggregation,
+splitting, assembly, and validation are all deterministic scripts. The only
+step that uses the Agent's own intelligence is the translation itself.
 
 ## When to use
 
@@ -27,12 +27,32 @@ the Agent's own intelligence is the translation itself.
 - User wants the Chinese translation to sound natural and to be suitable for
   Chinese voice synthesis (配音), not machine-translated.
 
+## Subtitle source (canonical)
+
+The subtitle is built from YouTube's **official auto-generated ASR**
+(`--write-auto-subs`, `en` track). This is the same underlying data as the
+video page's 转写文稿 (transcript) panel — both come from the timedtext ASR
+stream. The raw ASR is a **rolling-window fragment stream** (e.g. `0:00 Hi, my
+guest today needs almost no` / `0:03 introduction in the data world. He`, with
+windows ~2s apart), so it MUST be aggregated into sentence-level lines with
+`aggregate_srt.py` before translation. `aggregate_srt.py` also **de-overlaps**
+the output (each line's END is set to the next line's START), so the delivered
+subtitle is strictly non-overlapping — the same back-to-back convention the
+transcript panel displays.
+
+> Why not drive the transcript panel in a browser (CDP/agent-browser)? Tried
+> and abandoned (2026-08): CDP-created background tabs render the panel's
+> transcript button invisible (rect 0×0), clicks never fire the caption request,
+> and the panel only loads in a fully-interactive, logged-in tab that
+> automation can't reproduce from scratch. The reliable path is to fetch the
+> ASR directly — same data, no UI.
+
 ## Workflow (run in order)
 
-Work in a dedicated working directory (e.g. create one per video). All paths
-below are relative to that directory. Run scripts with the managed Python
-interpreter. Every script prints progress to stderr/stdout — read it before
-continuing.
+Work in a dedicated working directory (create one per video, e.g.
+`01_<title>/`). All paths below are relative to that directory. Run scripts
+with the managed Python interpreter. Every script prints progress to
+stderr/stdout — read it before continuing.
 
 ### Step 0 — Environment check (once per machine)
 
@@ -42,25 +62,9 @@ python3 <skill>/scripts/check_env.py --env-out yt_env.json
 
 Installs `yt-dlp` (into an isolated venv if not on PATH) and ensures `ffmpeg`
 exists (for merging video+audio). Writes `yt_env.json` used by later scripts.
-If it exits non-zero, resolve the missing binary (hints are printed) before
-proceeding.
-
-**CDP prerequisite (one-time setup):** fetching the official transcript drives
-your REAL Chrome over the DevTools protocol (CDP) — this is what carries your
-YouTube login state and avoids the "confirm you are not a robot" wall that
-blocks headless automation on popular videos. The one-time setup:
-
-1. In your Chrome, open `chrome://inspect/#remote-debugging`.
-2. Check **"Allow remote debugging for this browser instance"** (may require a
-   browser restart; a confirmation dialog may pop up when the proxy connects —
-   click **Allow**).
-3. You must be logged into YouTube in that Chrome (the video must be watchable
-   in your browser without a login wall).
-
-The bundled `scripts/check-deps.sh` verifies the debugging port and the bundled
-`scripts/cdp-proxy.mjs` (Node 22+, native WebSocket, no npm deps) provides the
-HTTP API. `fetch_transcript.py` starts/attaches the proxy automatically. The
-proxy keeps running on `127.0.0.1:3456` so later runs reuse it.
+**For a batch, copy `yt_env.json` into every per-video directory** (it's
+machine-specific, not per-video). If it exits non-zero, resolve the missing
+binary (hints are printed) before proceeding.
 
 ### Step 1 — Ask the user for video quality (interactive)
 
@@ -77,134 +81,46 @@ Map the answer to `--quality best|1080p|720p|480p|<height>`. Default to **best**
 if the user has no preference. For long interviews/talks where file size matters,
 recommend 720p.
 
-### Step 2 — Download MP4 + original subtitle
+### Step 2 — Download MP4 (background) + fetch ASR
 
-**先并行启动 MP4 下载（后台），再获取转写——两者互不依赖。** 用户选定质量后立即启动
-下载，让它在转写获取/翻译期间并行完成：
+**先并行启动 MP4 下载（后台），再拉字幕——两者互不依赖。** 用户选定质量后立即启动
+下载，让它在字幕/翻译期间并行完成：
 
 ```bash
-# 后台启动（run_in_background），输出重定向到 download.log
+# 后台启动（run_in_background=true，勿用 shell `&`——会被工具会话结束杀掉）
 python3 <skill>/scripts/download.py \
     --url "<youtube_url>" \
-    --quality best \
+    --quality 720p \
     --cookies-browser chrome \
     --output . \
     --env-out yt_env.json > download.log 2>&1
 ```
 
 > ⚠️ **启动后 3–5 秒必须检查 `download.log`**，确认出现 `[download]` 进度输出——
-> 防止参数错误/环境问题导致下载**静默失败**（曾发生：进程秒退，直到最后交付才发现没
-> 下载，白白丢失并行窗口）。若日志只有 usage/error，立即修复重跑。
+> 防止参数错误/环境问题导致下载**静默失败**。若日志只有 usage/error，立即修复重跑。
 >
-> 注意：`download.py` **不接受** `--lang` 参数（历史版本文档含此参数会报
-> `unrecognized arguments`）。字幕仅通过官方转写文稿获取，与 MP4 下载无关。
+> `download.py` 用 `--cookies-from-browser chrome` 复用登录态（会员/年龄受限视频
+> 可下）。**内置反爬降级**：默认 web client 撞上 "Sign in to confirm you're not
+> a bot" 时会自动带 `--extractor-args youtube:player_client=web_embedded` 重试
+> （实测绕过，无需人工干预）。若仍失败，把 yt-dlp 错误原样报给用户。
 
-**Subtitle source policy — official transcript only, no fallback:**
-The bilingual subtitle MUST be built from YouTube's official **transcript
-(转写文稿)** — the data shown in the video page's "Show transcript" panel. Do
-NOT fall back to yt-dlp's raw caption download (same rolling-window fragments,
-but detached from the page context and the sentence aggregation is already done
-by the pipeline below).
-
-> ⚠️ **面板数据形态（2026-08 实测，与旧文档不同）**：当前 YouTube 布局的转写面板
-> 展示的**不是**句子级聚合文本，而是**滚动窗口碎片段**（如 `0:00 Hi, my guest today
-> needs almost no` / `0:03 introduction in the data world. He`，相邻行窗口重叠
-> 2-3s，每条 ~2s）。`fetch_transcript.py` 抓到的 SRT 会是这样，**必须先用
-> `aggregate_srt.py` 聚合成句子级**（见 Step 3），否则碎片半句进字幕会在播放器里
-> 显得错乱。
-
-Fetch the transcript with the bundled script. It drives the user's real Chrome
-through the bundled CDP proxy (no agent-browser, no external services):
+同时（前台执行）拉取官方 ASR 并聚合为句级：
 
 ```bash
-python3 <skill>/scripts/fetch_transcript.py \
-    --url "<youtube_url>" \
-    --out transcript_official.srt
-```
-
-What it does, automatically:
-- Ensures the CDP proxy (`scripts/cdp-proxy.mjs`) is connected to the user's
-  Chrome (exits `2` with setup hints if remote debugging isn't enabled).
-- **Prefer an EXISTING tab**: if the user already has the same watch URL open
-  (checked via `/targets`), that tab is reused instead of opening a new one.
-  ⚠️ CDP-created background tabs can render the "内容转文字" button with rect 0×0
-  (invisible); clicks on it never trigger the panel and `get_transcript` may
-  return `400 Precondition check failed` — while the user's own tab renders the
-  button visible and the panel works (observed 2026-08). If the script keeps
-  failing on a new tab, close extra Chrome windows/tabs and open the video in
-  your visible Chrome first, then rerun.
-- Otherwise opens the video page in a **background tab**, expands the
-  description, clicks "内容转文字" (Show transcript) — preferring a VISIBLE
-  instance of the button — **polls up to 90s** (current layout takes ~30–40s
-  to render segments) for `ytd-transcript-segment-renderer` elements (with
-  legacy-renderer and timestamp-scan fallbacks), reads their text, and writes
-  an SRT.
-  ⚠️ **Do NOT click the "转写文稿" tab** — that puts the panel into a spinner
-  state where segments never render (observed repeatedly). The button's own
-  command already selects the transcript tab.
-- Parses the panel text with an English + monotonic-timestamp filter: the
-  monotonic check also drops a **duplicate second pass** (the panel sometimes
-  re-renders, doubling every segment — e.g. 861 → 1722; the jump back to 0:00
-  stops parsing). Timestamps support both `M:SS` and `H:MM:SS` (videos > 1h).
-- **Timedtext fallback (auto)**: if the panel hangs (spinner — `get_transcript`
-  returns `400 Precondition check failed`), the frontend still issues a
-  `/api/timedtext` request whose URL lands in the Performance API. The script
-  fetches it, aggregates the rolling-window segments into ~6s sentences, and
-  writes the SRT. ⚠️ Observed 2026-08: new ASR tracks with `variant=gemini`
-  return `200` with an **empty body** from the timedtext URL (both direct fetch
-  and yt-dlp) — in that case the panel in the USER's existing tab is the only
-  reliable source (its data comes through the player's caption path, not a
-  plain timedtext fetch).
-- Closes the background tab when done (existing reused tabs are left alone).
-
-If the script exits `2` (CDP not ready), give the user the one-time setup
-instructions from Step 0. If it exits `1` (transcript not retrievable) and a
-"confirm you are not a robot" wall appears, make sure the user is logged into
-YouTube in Chrome, then retry. **Never silently fall back to raw captions.**
-
-> **IP 风控 / 会话提示（实测）**：`get_transcript` 可能返回 `400 Precondition check
-> failed`——包括在**用户已登录浏览器**的页面上下文里直接 fetch 也会 400（2026-08
-> 实测，非纯 IP 问题，疑似 tab 会话/风控状态相关）。**不要浪费时间在 API
-> 参数/context/客户端变体上排查**——DOM 渲染路径 + **复用用户已打开的同一视频 tab**
-> 是最稳的解法：用户自己的 tab 里按钮可见、面板能渲染出全部段落，即使直接调 API
-> 失败也一样能拿到。
-
-Then download the MP4 at the chosen quality (if not already running):
-
-```bash
-python3 <skill>/scripts/download.py \
-    --url "<youtube_url>" \
-    --quality best \
-    --cookies-browser chrome \
-    --output . \
-    --env-out yt_env.json
-```
-
-`download.py` downloads the video **only** (no subtitle track): it probes
-metadata via `yt-dlp -J` for the title, downloads the MP4 merged at the chosen
-quality using `--cookies-from-browser chrome` (auth reuse for member-only /
-age-restricted videos), and writes `manifest.json` (title, paths) for later
-steps. If the MP4 download fails, surface the yt-dlp error.
-
-### Step 3 — Aggregate fragments, then parse into translation work files
-
-**Step 3a — Aggregate rolling-window fragments (required for current YouTube):**
-The panel SRT from `fetch_transcript.py` is fragmented (rolling window, ~2s per
-line with overlapping windows — see Step 2). Merge it into sentence-level SRT
-so each subtitle line is a readable sentence:
-
-```bash
-python3 <skill>/scripts/aggregate_srt.py transcript_official.srt transcript_sentences.srt \
+yt-dlp --write-auto-subs --sub-langs "en" --sub-format "srt" --convert-subs srt \
+    --skip-download --cookies-from-browser chrome \
+    -o "raw_asr.%(ext)s" "<youtube_url>"
+python3 <skill>/scripts/aggregate_srt.py raw_asr.en.srt transcript_official.srt \
     --max-gap 700 --max-group 7500
 ```
 
-If the fetched SRT is already sentence-level (short files, few lines), skip
-this step. **Never skip it for a long video whose SRT has many short lines.**
+`aggregate_srt.py` 把滚动窗口碎片合并成 ~5-9s 的句子级 SRT，并**去重叠**（每条
+END = 下一条 START）。**START 永不动**（语音起始点 = 音频对齐锚点）。
 
-**Step 3b — Split into translation chunks:**
+### Step 3 — Split into translation chunks
 
 ```bash
-python3 <skill>/scripts/split_translation.py "transcript_sentences.srt" \
+python3 <skill>/scripts/split_translation.py "transcript_official.srt" \
     --lines-per-part 70 --out .
 ```
 
@@ -212,7 +128,7 @@ Reads the transcript-derived SRT (`.ass` and `.srt` both accepted), strips
 ASS override tags, and writes:
 
 - `transcript.txt` — every event on one line: `<idx>\t<start>\t<end>\t<EN>`
-- `parts/part_01.txt …` — chunks of ≤120 lines each, **each chunk carrying a
+- `parts/part_01.txt …` — chunks of ≤70 lines each, **each chunk carrying a
   context header**:
   - `GLOBAL CONTEXT` — the video title / URL / duration / subtitle source
     (read from `manifest.json`), so every chunk is translated with the full
@@ -233,12 +149,26 @@ Agent with any built-in model can execute it.
 
 **并行策略（实测优化，省 ~30% 翻译耗时）：**
 
-- 每个 subagent 处理 **2 个分块**（25 块 → 13 个 agent，分 2 批并行；3 块/agent 完成率
-  明显下降，曾出现部分 agent 只写了一半文件）。
-- **每个 agent 返回后立即验证** `trans_NN.txt` 行数是否等于输入行数（缺失的当场重派，
-  **不要等全部返回后才验证**——实测全量验证后再补齐会白白串行 3–5 分钟）。
+- **一次性并行派发所有分块**（每个 subagent 2 个分块，全部 agent 在同一轮发出，勿一轮一个串行等），然后逐个验证返回。
+- **每个 agent 返回后立即验证行数 + 内容对齐**：
+  - 行数：`trans_NN.txt` 行数 = 输入行数（缺失的当场重派）。
+  - **内容对齐（强制）**：跑 `verify_translation.py`，逐行对比 trans 的 EN 与源 transcript.txt 的词重叠率，**一轮抓出 off-by-one 整块偏移**（见下）。
 - subagent prompt 必须要求**完成后返回输出行数**，便于立即核对。
 - 全部批次结束后再做一次全量校验：总行数 = 70×(N-1) + 尾块行数。
+
+```bash
+python3 <skill>/scripts/verify_translation.py --workdir .
+```
+
+> ⚠️ **已知失败模式：翻译 agent 整块偏移（2026-08 在一个 58 分钟视频里出现 2 次，各浪费 20+ 分钟）**。
+> 症状：chunk 中间某一行被**合并/跳过**后，其后所有行内容整体上移一格、末行重复；时间戳可能正确也可能跟着错位——
+> 时间戳错位时 assemble 能抓到，但**时间戳正确而内容错位时 assemble 校验通过、只有 verify_translation.py 能发现**。
+> 处理：`verify_translation.py` 会提示"内容更接近 src[N]"，据此按以下机械步骤重建（约 5 分钟）：
+> 1. 找到偏移起点（某行把源第 N 行并进了 N-1）；
+> 2. 起点行裁剪为源内容；起点+1 行补译缺失的一句；其后各行整体下移一格取回正确内容；
+> 3. 时间戳一律用 transcript.txt 的源值；
+> 4. 重新 verify + assemble。
+> 预防：分块越小越不易偏移（`--lines-per-part 50` 更稳，代价是多几个 agent）；翻译 prompt 已加"禁止合并/跳行"硬规则。
 
 For each chunk `parts/part_NN.txt` (parallel with separate subagents, 2 per
 agent):
@@ -254,9 +184,12 @@ agent):
    - Keep `<idx>`, `<start>`, `<end>` byte-identical; **never touch timestamps**.
    - Same number of output lines as input; 1:1 mapping.
    - Never translate or echo the `#` context lines.
-   - **TTS 净化（实测强制项）**：删除舞台指示（`[cheering]`/`[applause]`/`[laughter]` 及其中译"（欢呼声）"等，TTS 会照读）；
-     识别并删除混入句尾的章节标题（但台词中真实引用的演讲/书名保留）；行内不拆词断句；全片人称统一（访谈用"你"不用"您"）；
-     全面 ASR 纠错（人名/品牌/which→who/乱码重建/拼写统一）。详见 `translation_prompt.md` 的"TTS 净化与纠错补充规范"。
+   - **TTS 净化（实测强制项）**：删除舞台指示（`[cheering]`/`[applause]`/`[music]`
+     /`[snorts]` 等及其中译，TTS 会照读）；识别并删除混入句尾的章节标题；行内不拆词
+     断句；全片人称统一（访谈/教程用"你"不用"您"）；全面 ASR 纠错（人名/品牌/乱码
+     重建/拼写统一）。
+   - **纯音乐行（整行只有 `[Music]`）**：EN 列写 `...`，ZH 列写 `♪`（两端都必须有
+     内容，否则 assemble 校验报 "both languages empty"）。
 3. Write the result to `parts/trans_NN.txt` in format
    `<idx>\t<start>\t<end>\t<corrected EN>\t<ZH>` (UTF-8).
 
@@ -285,26 +218,14 @@ language field, tab inside text, bad timestamps, or a timestamp that was
 changed vs. the source — verified against `subtitle_meta.json`). Never deliver a
 file this step rejects.
 
-> Note on overlap: YouTube ASR subtitles are a rolling window where adjacent
-> lines naturally overlap by 1–2s. **This overlap is normal and must be kept**:
-> the start timestamps ARE aligned to the audio (verified empirically — audio
-> speech onset 16.318s vs. first caption start 16.32s). Pushing starts forward
-> to remove overlap breaks lip-sync, so the validator checks timestamp
-> *inheritance* (identical to source) and never enforces monotonicity.
-
-### Step 5.5 — (Rare) fix lines with no visible window
-
-Almost never needed. A line whose whole window lies inside the previous line's
-(`end <= previous end`) would show for 0 seconds in a player. Only that case is
-fixed, by extending the END forward (start is NEVER touched):
-
-```bash
-python3 <skill>/scripts/deoverlap.py "<X>.ass" --min-duration 0.5
-```
-
-Do NOT use this to "remove overlap" — de-overlapping breaks lip-sync. Run only
-if the user reports missing/blinking subtitle lines, and always keep starts
-intact.
+> **已知的两个校验失败场景及处理**：
+> - **时间戳被翻译 agent 改动**（实测出现过 5 次）：校验报 `timestamp changed!`。
+>   用 `grep -n "^<idx>\t" transcript.txt` 找回源时间戳，改回 trans 文件后重跑。
+> - **纯音乐行两侧都空**：校验报 `both languages empty`。按 Step 4 的 `... ♪` 规范
+>   补上。
+>
+> 注意：`assemble_final.py` 只校验**时间戳继承**（与源一致），不校验重叠——去重叠
+> 由 `aggregate_srt.py` 在源头保证。
 
 ### Step 6 — Deliver
 
@@ -320,38 +241,40 @@ English is in the `.ass`).
 
 ## Key invariants (do not break)
 
-- **Timestamps are inherited, never recomputed.** The pipeline only reads the
-  source timeline and re-emits it. Alignment with the audio is guaranteed by
-  construction.
+- **START timestamps are inherited, never recomputed or shifted.** The pipeline
+  reads the ASR fragment timeline and re-emits each sentence's first-fragment
+  start verbatim. Alignment with the audio is guaranteed by construction —
+  pushing starts (e.g. to remove overlap) breaks lip-sync and is FORBIDDEN.
+- **Output is strictly non-overlapping.** Each line's END = next line's START
+  (set by `aggregate_srt.py`; same convention as the transcript panel). An
+  overlapping batch observed 2026-08 had 3844 overlapping pairs — never deliver
+  overlapping lines.
 - **Delimiter is ` || `** (space-pipe-pipe-space). It must not appear inside
   either language field. Default ASS style: Noto Sans CJK SC, size 52.
-- **Source subtitle is YouTube's official transcript** (the 转写文稿 panel data),
-  never yt-dlp's raw caption download. Current YouTube panel data is
-  rolling-window **fragments**, so they MUST be merged into sentence-level SRT
-  with `aggregate_srt.py` before splitting. Fragment start timestamps stay
-  inherited end-to-end; do not "fix" overlap by pushing starts — that breaks
-  lip-sync.
+- **Source subtitle is YouTube's official ASR (timedtext), aggregated
+  sentence-level.** Never use YouTube's machine translation; never hand-edit
+  timestamps to "fix" overlap.
 - **Translation is the Agent's job, mechanics are the scripts' job.** Do not
   hand-write parsing/assembly logic that already exists in `scripts/`.
-- **Delivered .ass is TTS-safe:** stage directions (`[cheering]` `[applause]`
-  `[laughter]` → "（欢呼声）" etc.), leaked chapter headings, and mid-word
-  line breaks must be cleaned during translation — the .ass contains only
-  spoken lines a voice synthesizer can read aloud.
+- **Delivered .ass is TTS-safe:** stage directions (`[music]`, `[snorts]`,
+  "（欢呼声）" etc.), leaked chapter headings, and mid-word line breaks must be
+  cleaned during translation — the .ass contains only spoken lines a voice
+  synthesizer can read aloud.
 
 ## Resources
 
 ### scripts/
 - `check_env.py` — probe/install yt-dlp + ffmpeg; write `yt_env.json`
-- `check-deps.sh` — verify Chrome remote-debugging (DevToolsActivePort / 9222)
-- `cdp-proxy.mjs` — bundled CDP proxy (Node 22+, native WebSocket, no npm deps);
-  exposes HTTP API on `127.0.0.1:3456` to drive the user's real Chrome
-- `fetch_transcript.py` — fetch YouTube's official transcript (转写文稿) via the
-  bundled CDP proxy (prefers an existing tab on the same watch URL) and write
-  it as raw SRT (rolling-window fragments)
-- `aggregate_srt.py` — merge rolling-window fragments into sentence-level SRT
-  (timestamps inherited, starts never moved); run before split_translation
-- `download.py` — metadata probe, auth reuse, quality select, MP4 download only
+- `download.py` — metadata probe, auth reuse (Chrome cookies), quality select,
+  MP4 download only; auto-falls back to `player_client=web_embedded` on
+  bot-check
+- `aggregate_srt.py` — merge rolling-window ASR fragments into sentence-level
+  SRT and **de-overlap** (each line's END = next line's START; starts never
+  moved); run before split_translation
 - `split_translation.py` — parse SRT/ASS → transcript + chunks + manifest
+- `verify_translation.py` — post-translation CONTENT check (token overlap vs
+  source); catches off-by-one block shifts that assemble_final can't see; run
+  after every translation batch
 - `assemble_final.py` — merge translated chunks → bilingual .ass + validation
 - `deoverlap.py` — (rare) give windowless lines a minimum visible window; NEVER
   de-overlaps starts, so audio alignment is always preserved

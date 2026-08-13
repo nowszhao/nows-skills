@@ -188,7 +188,17 @@ def open_video(port: int, url: str) -> tuple[str, bool]:
         pass
     raw = _http_get(port, f"/new?url={urllib.parse.quote(url, safe='')}", timeout=30)
     try:
-        return json.loads(raw).get("targetId", ""), True
+        target = json.loads(raw).get("targetId", "")
+        if target:
+            # Background tabs get throttled by Chrome: YouTube's description
+            # area / transcript button can render with rect 0x0 (invisible) and
+            # clicks silently do nothing. Bringing the tab to the foreground
+            # forces the full layout to render.
+            try:
+                _http_get(port, f"/activate?target={target}", timeout=10)
+            except Exception:
+                pass
+        return target, True
     except Exception:
         return "", True
 

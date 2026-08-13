@@ -2,8 +2,8 @@
 """
 download.py — Download a YouTube video (MP4 ONLY), reusing the browser login
 session via cookies. Subtitle acquisition is NO LONGER part of this script:
-the bilingual subtitle must be built from YouTube's official transcript
-(转写文稿), fetched by fetch_transcript.py via the bundled CDP proxy.
+the bilingual subtitle is built from YouTube's official ASR (timedtext) via
+`yt-dlp --write-auto-subs` + `aggregate_srt.py` (see SKILL.md).
 
 Steps performed:
   1. Probe metadata via `yt-dlp -J` to read the title (for file naming).
@@ -13,7 +13,8 @@ Steps performed:
 
 Auth: reuses the browser session with --cookies-from-browser. If that fails
 (e.g. Keychain permission or no login), retries without cookies for public
-videos.
+videos. On YouTube's "Sign in to confirm you're not a bot" wall, automatically
+retries with `player_client=web_embedded` (bypasses the check; verified 2026-08).
 
 Usage:
     python3 download.py --url <URL> [--quality best|1080p|720p|<height>] \
@@ -140,9 +141,26 @@ def main() -> int:
         ]
         r2 = run(cmd2)
         if r2.returncode != 0:
+            # Final fallback: the default (web) client can hit YouTube's
+            # "Sign in to confirm you're not a bot" wall even with cookies.
+            # player_client=web_embedded uses the embedded player path, which
+            # bypasses that check (verified 2026-08 on multiple videos).
             log(f"Video download failed: {r2.stderr.strip()[-500:]}")
-            return 2
-        r = r2
+            log("Retrying with player_client=web_embedded (bypasses bot-check)...")
+            cmd3 = [
+                yt, "--no-playlist", "--no-warnings",
+                "--cookies-from-browser", args.cookies_browser,
+                "--extractor-args", "youtube:player_client=web_embedded",
+                "-f", f_sel, "--merge-output-format", "mp4",
+                "-o", out_video, args.url,
+            ]
+            r3 = run(cmd3)
+            if r3.returncode != 0:
+                log(f"Video download failed (web_embedded): {r3.stderr.strip()[-500:]}")
+                return 2
+            r = r3
+        else:
+            r = r2
 
     mp4s = glob.glob(os.path.join(args.output, f"{safe_title}.mp4"))
     if not mp4s:

@@ -300,6 +300,14 @@ const server = http.createServer(async (req, res) => {
       res.end(JSON.stringify(resp.result));
     }
 
+    // GET /activate?target=xxx - 将 tab 提到前台
+    // 后台 tab 会被浏览器节流（YouTube 的描述区/转写按钮可能渲染成 0x0 不可见），
+    // 激活到前台后布局才完整渲染——fetch_transcript.py 在新建 tab 后会调用它。
+    else if (pathname === '/activate') {
+      await sendCDP('Target.activateTarget', { targetId: q.target });
+      res.end(JSON.stringify({ ok: true }));
+    }
+
     // GET /navigate?target=xxx&url=yyy - 导航（自动等待加载）
     else if (pathname === '/navigate') {
       const sid = await ensureSession(q.target);
@@ -502,6 +510,7 @@ const server = http.createServer(async (req, res) => {
           '/targets': 'GET - 列出所有页面 tab',
           '/new?url=': 'GET - 创建新后台 tab（自动等待加载）',
           '/close?target=': 'GET - 关闭 tab',
+          '/activate?target=': 'GET - 将 tab 提到前台（后台 tab 会被节流）',
           '/navigate?target=&url=': 'GET - 导航（自动等待加载）',
           '/back?target=': 'GET - 后退',
           '/info?target=': 'GET - 页面标题/URL/状态',

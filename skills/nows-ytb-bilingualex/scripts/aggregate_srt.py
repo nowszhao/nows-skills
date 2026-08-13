@@ -19,6 +19,12 @@ Aggregation rules:
   one-word "No." groups), or when the caption STARTS with ">>" (speaker change),
   or when a > MAX_GAP_MS silence occurs.
 - The LAST caption's end is extended +2s so the final line has a visible window.
+- **De-overlap (CRITICAL)**: the rolling-window source means a merged sentence's
+  last fragment END extends past the next sentence's start. After aggregation
+  each sentence's END is set to the NEXT sentence's START (same convention the
+  transcript panel uses), so the output SRT is strictly non-overlapping. If this
+  is skipped, overlapping windows leak into the final .ass (observed 2026-08:
+  3844 overlapping pairs across a 14-video batch).
 - Timestamps are inherited from the source, never recomputed. Starts are NEVER
   pushed forward, so audio alignment is preserved by construction.
 
@@ -119,6 +125,18 @@ def main():
             cur[2].append(text)
 
     flush()
+
+    # De-overlap: YouTube ASR is a rolling window, so each fragment's end can
+    # extend past the next fragment's start. The aggregated sentence inherited
+    # end = last fragment's end, which OVERLAPS the next sentence — that leaked
+    # into the final .ass (3844 overlapping pairs observed 2026-08). Fix by
+    # setting each sentence's end = next sentence's start (the same convention
+    # the transcript panel uses). Starts are never touched (audio alignment).
+    for i in range(len(sentences) - 1):
+        s, e, t = sentences[i]
+        nxt = sentences[i + 1][0]
+        if nxt < e and nxt > s:
+            sentences[i] = (s, nxt, t)
 
     if sentences:
         s, e, t = sentences[-1]
