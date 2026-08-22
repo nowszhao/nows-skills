@@ -57,6 +57,17 @@
     box-shadow: 0 4px 24px rgba(255,79,0,0.45);
   }
 
+  /* 差异化优势标签：真人感中文配音（主视觉，固定强化） */
+  .feature-tag {
+    display: inline-flex; align-items: center; gap: 14px;
+    background: linear-gradient(90deg, #10b981 0%, #059669 60%, #0d9488 100%);
+    border-radius: 14px; padding: 16px 36px;
+    font-size: 34px; font-weight: 900; letter-spacing: 3px;
+    box-shadow: 0 0 0 4px rgba(16,185,129,0.28), 0 10px 44px rgba(16,185,129,0.55);
+    white-space: nowrap;
+  }
+  .feature-tag svg { width: 34px; height: 34px; flex: none; filter: drop-shadow(0 2px 6px rgba(0,0,0,0.35)); }
+
   /* 中部标题 */
   .main { position: relative; z-index: 2; }
   .kicker { font-size: 30px; font-weight: 500; color: #c4b5fd; letter-spacing: 3px; margin-bottom: 18px; }
@@ -93,12 +104,22 @@
     </div>
 
     <div class="main">
-      <!-- ③ kicker：最强卖点/场景引导（一行，30px，紫色小字） -->
+      <!-- ③ 差异化优势标签（主视觉）：固定为"真人感中文配音"，大字 + 绿色发光，
+           置于主标题上方，生成时不得删除或改动 -->
+      <div class="feature-tag" style="margin-bottom: 34px;">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3z"/>
+          <path d="M19 10a7 7 0 0 1-14 0"/>
+          <line x1="12" y1="17" x2="12" y2="21"/>
+        </svg>
+        真人感中文配音
+      </div>
+      <!-- ④ kicker：最强卖点/场景引导（一行，30px，紫色小字） -->
       <div class="kicker">最强卖点一句话</div>
-      <!-- ④ 主标题：观众关心的问题句式（悬念钩子，2 行以内大字，可用 .hl 高亮关键词）
+      <!-- ⑤ 主标题：观众关心的问题句式（悬念钩子，2 行以内大字，可用 .hl 高亮关键词）
            例：什么时候该从提示词走向自训模型？/ 为什么便宜 80% 还是没人用？ -->
       <h1>观众关心的<span class="hl">问题</span>？<br>第二行补充</h1>
-      <!-- ⑤ 副标题：一句话内容定位，交代视频讲什么（主题路径/覆盖范围） -->
+      <!-- ⑥ 副标题：一句话内容定位，交代视频讲什么（主题路径/覆盖范围） -->
       <div class="sub"><span class="line"></span>主题路径或覆盖范围一句话</div>
     </div>
 
