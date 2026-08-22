@@ -7,20 +7,23 @@
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body { display: flex; align-items: center; justify-content: center; min-height: 100vh; background: #111; font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", "Segoe UI", sans-serif; }
 
-  /* 1280x720 封面画布 */
+  /* 1280x960 封面画布（4:3，适配首页渲染） */
+  /* 紧凑三段式布局：整体居中，避免 4:3 画布产生上下大空隙。
+     固定规则：justify-content:center + gap:36px；不得改回 space-between。 */
   .cover {
     position: relative;
     width: 1280px;
-    height: 720px;
+    height: 960px;
     overflow: hidden;
     background: radial-gradient(1200px 600px at 85% -10%, #3b1b8f 0%, rgba(59,27,143,0) 55%),
                 radial-gradient(900px 500px at -5% 110%, #0e7490 0%, rgba(14,116,144,0) 50%),
                 linear-gradient(135deg, #0b0d1e 0%, #131033 55%, #1a0f45 100%);
     color: #fff;
-    padding: 64px 80px;
+    padding: 48px 80px;
     display: flex;
     flex-direction: column;
-    justify-content: space-between;
+    justify-content: center;
+    gap: 36px;
   }
 
   /* 数学网格装饰（3B1B 风格） */
@@ -68,15 +71,15 @@
   }
   .feature-tag svg { width: 34px; height: 34px; flex: none; filter: drop-shadow(0 2px 6px rgba(0,0,0,0.35)); }
 
-  /* 中部标题 */
-  .main { position: relative; z-index: 2; }
-  .kicker { font-size: 30px; font-weight: 500; color: #c4b5fd; letter-spacing: 3px; margin-bottom: 18px; }
+  /* 主体内容：不再撑满画布，作为紧凑内容组参与整体居中 */
+  .main { position: relative; z-index: 2; flex: none; display: block; }
+  .kicker { font-size: 30px; font-weight: 500; color: #c4b5fd; letter-spacing: 3px; margin-bottom: 12px; }
   h1 {
     font-size: 110px; line-height: 1.08; font-weight: 900; letter-spacing: 2px;
     text-shadow: 0 8px 40px rgba(0,0,0,0.45);
   }
   h1 .hl { background: linear-gradient(90deg, #ff9a3d, #ff4f00 60%, #ff2d55); -webkit-background-clip: text; background-clip: text; color: transparent; }
-  .sub { margin-top: 26px; font-size: 38px; font-weight: 600; color: #e5e7eb; display: flex; align-items: center; gap: 18px; }
+  .sub { margin-top: 20px; font-size: 38px; font-weight: 600; color: #e5e7eb; display: flex; align-items: center; gap: 18px; }
   .sub .line { width: 64px; height: 6px; border-radius: 3px; background: linear-gradient(90deg, #ff8a00, #ff4f00); }
 
   /* 底部信息条 */
@@ -106,7 +109,7 @@
     <div class="main">
       <!-- ③ 差异化优势标签（主视觉）：固定为"真人感中文配音"，大字 + 绿色发光，
            置于主标题上方，生成时不得删除或改动 -->
-      <div class="feature-tag" style="margin-bottom: 34px;">
+      <div class="feature-tag" style="margin-bottom: 18px;">
         <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3z"/>
           <path d="M19 10a7 7 0 0 1-14 0"/>
