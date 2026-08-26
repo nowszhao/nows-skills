@@ -12,8 +12,11 @@ This script merges consecutive fragments into ~5-9s sentences, keeping each
 sentence's start timestamp (= the true speech onset of the first fragment).
 
 Aggregation rules:
-- Merge consecutive captions while the inter-caption silence is <= MAX_GAP_MS
-  and the running group is <= MAX_GROUP_MS.
+- Merge consecutive captions while the inter-caption silence is <= MAX_GAP_MS,
+  the running group is <= MAX_GROUP_MS, and the running word count is <=
+  MAX_WORDS (a hard cap per line — the safety net that guarantees no delivered
+  line ever grows unboundedly long even when punctuation and silence never fire;
+  default 26).
 - Split a group early when a caption ENDS with a sentence terminator
   (. ? !) and the group already has >= MIN_TERM_MS of content (avoids making
   one-word "No." groups), or when the caption STARTS with ">>" (speaker change),
@@ -30,7 +33,7 @@ Aggregation rules:
 
 Usage:
     python3 aggregate_srt.py <fragmented.srt> <sentence_level.srt> [--max-gap 700]
-                             [--max-group 7500] [--min-term 1200]
+                             [--max-group 7500] [--min-term 1200] [--max-words 26]
 """
 import argparse
 import re
@@ -82,6 +85,7 @@ def main():
     ap.add_argument("--max-gap", type=int, default=700, help="max silence ms between merged fragments (default 700)")
     ap.add_argument("--max-group", type=int, default=7500, help="hard cap ms per sentence (default 7500)")
     ap.add_argument("--min-term", type=int, default=1200, help="min group ms before a terminator can split (default 1200)")
+    ap.add_argument("--max-words", type=int, default=26, help="hard cap words per aggregated line (default 26)")
     args = ap.parse_args()
 
     captions = read_captions(args.input)
@@ -90,13 +94,13 @@ def main():
         return 1
 
     sentences = []
-    cur = None  # (start_ms, end_ms, [text_parts])
+    cur = None  # (start_ms, end_ms, [text_parts], word_count)
 
     def flush():
         nonlocal cur
         if cur is None:
             return
-        s, e, parts = cur
+        s, e, parts, _ = cur
         text = re.sub(r"\s+", " ", " ".join(parts)).strip()
         text = re.sub(r">>\s*", "", text)  # collapse speaker markers
         if text:
@@ -108,21 +112,24 @@ def main():
         ends_sentence = bool(SENT_END_RE.search(text.rstrip()))
         gap = (start_ms - cur[1]) if cur is not None else 0
         group_dur = (cur[1] - cur[0]) if cur is not None else 0
+        group_words = cur[3] if cur is not None else 0
         split = (
             cur is None
             or is_speaker_change
             or gap > args.max_gap
             or group_dur > args.max_group
+            or group_words > args.max_words
         )
         if not split and ends_sentence and group_dur >= args.min_term:
             split = True
 
         if split:
             flush()
-            cur = [start_ms, end_ms, [text.lstrip()]]
+            cur = [start_ms, end_ms, [text.lstrip()], len(text.split())]
         else:
             cur[1] = end_ms
             cur[2].append(text)
+            cur[3] += len(text.split())
 
     flush()
 

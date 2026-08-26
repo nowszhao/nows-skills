@@ -111,18 +111,105 @@ yt-dlp --write-auto-subs --sub-langs "en" --sub-format "srt" --convert-subs srt 
     --skip-download --cookies-from-browser chrome \
     -o "raw_asr.%(ext)s" "<youtube_url>"
 python3 <skill>/scripts/aggregate_srt.py raw_asr.en.srt transcript_official.srt \
-    --max-gap 700 --max-group 7500
+    --max-gap 700 --max-group 7500 --max-words 26
 ```
 
 `aggregate_srt.py` 把滚动窗口碎片合并成 ~5-9s 的句子级 SRT，并**去重叠**（每条
 END = 下一条 START）。**START 永不动**（语音起始点 = 音频对齐锚点）。
+`--max-words 26` 是词数硬兜底：即使标点/停顿信号全部失效，单行也不会长到离谱
+（真正的语义断句由下一步的 LLM 整理完成）。
+
+> ⚠️ **ASR 拉取被 PO-token 拦截（2026-08 实测）**：默认 web client 可能报
+> `There are missing subtitles languages because a PO token was not provided` /
+> `There are no subtitles for the requested languages`。此时给同一命令加
+> `--extractor-args "youtube:player_client=web_embedded"` 即可取到 en ASR
+> （与下载的 bot-check 降级同源；`tv` 客户端会报 "The page needs to be reloaded"，不要用）。
+
+### Step 2.5 — LLM 语义整理（翻译前唯一智能步骤的入口）
+
+> 为什么需要：`aggregate_srt.py` 只认机械信号（标点/静音/`>>`），口语无标点无停顿
+> 时单行可达 26 词上限。这一步让 **Agent 的内置模型**基于上下文（GLOBAL CONTEXT +
+> PREVIOUS CHUNK）重断句；**时间戳全部由脚本从源碎片继承**，模型只做断句决策、
+> 绝不输出时间戳。
+
+> **模式 FULL（默认，全量语义重断句，`prepare-full`）**——所有行由 Agent 语义重构，
+> 可**保持/拆分/跨行合并**，修复机械断句把一句话切两半的问题（2026-08 实测：
+> B 版开头保留 "…and I hope" 半句，FULL 版合并为完整句）。**2026-08 起作为默认**：
+> 跨行断句质量明显优于 B，代价是多一轮全片模型调用（长视频 +30% 耗时，可接受）：
+> ```bash
+> python3 <skill>/scripts/refine_srt.py prepare-full transcript_official.srt raw_asr.en.srt \
+>     --workdir . --lines-per-part 40 --max-words 16
+> ```
+
+> **模式 B（可选，只整理超长行）**——低开销，修复"单行 30+ 词"；仅当用户明确要求
+> 快速出片或视频极长（>1.5h）且不在乎跨行断句质量时使用：
+> ```bash
+> python3 <skill>/scripts/refine_srt.py prepare transcript_official.srt raw_asr.en.srt \
+>     --workdir . --max-words 16 --max-dur-ms 6000
+> ```
+> 只把超过阈值的行交给 Agent 断成 2-4 个子句，其余行保持机械边界。
+
+- prepare / prepare-full 输出 `refine_parts/refine_part_NN.txt`（带上下文头的指令
+  文件）与 `refine_plan.json`。**没有超长行时 prepare 直接打印 0、无动作**。
+- 用 **subagent 并行**处理每个分块：模式 B 读 `<skill>/references/refine_prompt.md`，
+  模式 FULL 读 `<skill>/references/refine_prompt_full.md`，整理后写入
+  `refine_parts/refined_NN.txt`。
+  硬规则：模式 B 输出 `<idx>\t<子句>`（idx 原样）；模式 FULL 输出 `S<seq>\t<句子>`
+  （每文件独立编号，可跨行合并）；实词不许增删改、只可加标点、每句 5-16 词、
+  **不输出时间戳**。
+- **FULL 模式 subagent prompt 必写的第一条硬规则（2026-08 血泪教训）**：
+  **"一个词都不能删——包括 uh/um/重复词（the the、to to）、连接词（and/to），
+  全部原样保留，只允许加标点"**。FULL 模式 agent 重写句子时天然想"清理"语气词，
+  实测 25 块中有 5 块（20%）删了 uh/um/and/to，直接导致时间轴塌缩。这条规则
+  必须写在 prompt 最前面，并附一句"上一个 agent 删了 X 个词导致失败"的点名警告
+  （若该块曾漂移）。
+
+```bash
+# apply 前必做：词集 + 词序双校验（2026-08 实测两个都要查，缺一漏坑）
+# 一行命令：模式 FULL 用 --mode full（默认），模式 B 用 --mode b
+python3 <skill>/scripts/check_refined.py --workdir . --mode full
+# 输出 ALL PASS 才可 apply；DRIFT FOUND 则重派对应分块（见下方警告）
+```
+
+```bash
+# apply：把整理结果映射回源碎片时间线，产出新的句子级 SRT（两种模式通用）
+python3 <skill>/scripts/refine_srt.py apply --workdir . --out transcript_refined.srt
+```
+
+- `apply` 用**全局词流贪心匹配**逐句锚定：句子 START = 该句首词所在**源碎片的
+  START**（继承，不重算；首词落在碎片内部时按词数比例在碎片内细化，避免重叠/0 时长）。
+  校验词流覆盖率（句子必须覆盖全部源词），失败 exit 2。
+- **apply 后必查时间轴**（即使 exit 0 也要查——覆盖率校验有盲区）：扫描输出 SRT，
+  确认 ① 无连续相同 START 的长 run（塌缩）、② 无 START 递减（倒挂）、③ 无重叠。
+  `unmatched sentence words` 大（几千）不必然坏，只要时间轴单调即可；但出现上述
+  任一症状就是某块词序错乱，回查该块的词序校验。
+- 默认 FULL 模式下全部行都已重写，**Step 3 的输入恒为 `transcript_refined.srt`**；
+  仅走模式 B 且无超长行时才继续用 `transcript_official.srt`。
+
+> ⚠️ **FULL 模式词漂移 → 时间轴整体塌缩（2026-08 实测，最坑的失败模式）**：
+> 任一 subagent 在重断句时改动/新增/合并了实词（哪怕一个，"Newman"→"Newmann"、
+> 多加 18 个词、把 "non googlele" 拼成 "nongooglele"），`apply` 的贪心匹配从该词
+> 处开始失配并把 `pos` 直接推到底，**其后所有行塌缩到同一时间戳**（症状：输出里
+> 大量 500ms/相同 START/重叠行，且 `unmatched sentence words` 巨大）。而覆盖率
+> 校验有个盲区：`pos` 触底时 `consumed=100%` 会跳过检查，`apply` 照样 exit 0。
+> **防患于未然（apply 前必做）**：跑上面的**词集 + 词序双校验**，发现漂移就单独
+> 重派该分块，并在 prompt 里点名错误类型（如"禁止把 X 写成 Y"、"删了 uh/um 必须
+> 补回"）。10-25 块中通常有 1-5 块会漂（FULL 模式删语气词是高频，约 20%），定向
+> 修复比重跑全片便宜得多。
+> **禁止用脚本机械插词修复漂移（2026-08 实测反例）**：在 refined 里"找前驱词插回"
+> 会破坏词序（词集 100% 但 LCS 顺序匹配率掉到 0.92 以下），apply 照样塌缩，白跑
+> 一轮。漂移了就直接重派该块，让 agent 用词序与源完全一致的版本重写。
 
 ### Step 3 — Split into translation chunks
 
 ```bash
-python3 <skill>/scripts/split_translation.py "transcript_official.srt" \
+python3 <skill>/scripts/split_translation.py "transcript_refined.srt" \
     --lines-per-part 70 --out .
 ```
+
+> 输入选择：**默认 FULL 模式下用 `transcript_refined.srt`**（Step 2.5 已重写全部行，
+> 行数更短更均匀）；仅当走模式 B 且确无超长行时才用 `transcript_official.srt`。
+> 后续 split/assemble 全链路只依赖这一步的输出，与输入文件名无关。
 
 Reads the transcript-derived SRT (`.ass` and `.srt` both accepted), strips
 ASS override tags, and writes:
@@ -219,10 +306,25 @@ changed vs. the source — verified against `subtitle_meta.json`). Never deliver
 file this step rejects.
 
 > **已知的两个校验失败场景及处理**：
-> - **时间戳被翻译 agent 改动**（实测出现过 5 次）：校验报 `timestamp changed!`。
->   用 `grep -n "^<idx>\t" transcript.txt` 找回源时间戳，改回 trans 文件后重跑。
+> - **时间戳被翻译 agent 改动 / 整体 +1 偏移**（实测在连续 2 个视频复现）：`verify_translation.py`
+>   **只校验内容对齐、不校验时间戳**，所以漂移对它隐形；只有 `assemble_final.py` 会报
+>   `timestamp changed!`（典型症状：trans[idx] 的时间戳 = 源[idx+1]，文本内容却按 idx 正确）。
+>   **修复（机械化，无需重译）**：先备份，再按 idx 从 canonical `subtitle_meta.json` 重锚全部
+>   trans 行的时间戳，保留已翻译 EN/ZH 文本：
+>   ```bash
+>   python3 <skill>/scripts/reanchor_timestamps.py --workdir .   # 自动备份到 parts/trans_backup/ 并重锚
+>   ```
+>   重锚后重跑 `assemble_final.py` 即通过。⚠️ `verify_translation.py` 通过 ≠ 时间轴正确，
+>   组装前务必先 reanchor 一次作为安全网（成本极低，可避免 assemble 失败返工）。
 > - **纯音乐行两侧都空**：校验报 `both languages empty`。按 Step 4 的 `... ♪` 规范
 >   补上。
+> - **纯音乐行两侧都空**：校验报 `both languages empty`。按 Step 4 的 `... ♪` 规范
+>   补上。
+> - **模式 B 的 1ms 窗口行**（2026-08 实测）：apply 的碎片内词数比例细化可能把某行
+>   算成 `559 --> 560`（1ms），split 显示成两位小数后变 `0:38:56.56 -> 0:38:56.56`
+>   （start==end），assemble 报 `bad timestamps`。处理：把该行 START/END 改为精确
+>   可表示的整 10ms 值（如 `560 --> 57060`，1ms 起点微调无音频影响），重新 split，
+>   同步对应 trans 文件的 start/end，再 assemble。
 >
 > 注意：`assemble_final.py` 只校验**时间戳继承**（与源一致），不校验重叠——去重叠
 > 由 `aggregate_srt.py` 在源头保证。
@@ -245,6 +347,9 @@ English is in the `.ass`).
   reads the ASR fragment timeline and re-emits each sentence's first-fragment
   start verbatim. Alignment with the audio is guaranteed by construction —
   pushing starts (e.g. to remove overlap) breaks lip-sync and is FORBIDDEN.
+  This extends to Step 2.5: a refined clause's START is the START of the source
+  fragment holding the clause's first word — `refine_srt.py` anchors it, the
+  Agent never writes a timestamp.
 - **Output is strictly non-overlapping.** Each line's END = next line's START
   (set by `aggregate_srt.py`; same convention as the transcript panel). An
   overlapping batch observed 2026-08 had 3844 overlapping pairs — never deliver
@@ -270,11 +375,28 @@ English is in the `.ass`).
   bot-check
 - `aggregate_srt.py` — merge rolling-window ASR fragments into sentence-level
   SRT and **de-overlap** (each line's END = next line's START; starts never
-  moved); run before split_translation
+  moved); `--max-words 26` hard-caps line length as a mechanical safety net;
+  run before refine_srt.py
+- `refine_srt.py` — **LLM semantic re-splitting of ASR lines**: `prepare` (mode B,
+  over-long lines only) and `prepare-full` (mode FULL, every line — keep/split/
+  MERGE adjacent lines) write instruction chunks; `apply` anchors each output
+  sentence onto the source fragment timeline with a greedy global word-stream
+  match (START inherited from the fragment holding the sentence's first word;
+  intra-fragment refinement by word-count ratio when the boundary lands inside
+  a fragment). The Agent decides WHERE to split, the script owns every
+  timestamp. Optional — runs before split_translation.py
+- `check_refined.py` — **apply 前词集+词序双校验**（2026-08 新增，FULL 模式必备）：
+  对每对 refine_part_NN/refined_NN 检查 ① 词集 Counter 100% 相等、② refined 词流
+  相对源流的 LCS 顺序匹配率 >= 0.995；`--mode full|b`（默认 full）。检出漂移
+  exit 1 并列出分块号，直接重派该块（禁止机械插词修复，会破坏词序）
 - `split_translation.py` — parse SRT/ASS → transcript + chunks + manifest
 - `verify_translation.py` — post-translation CONTENT check (token overlap vs
   source); catches off-by-one block shifts that assemble_final can't see; run
   after every translation batch
+- `reanchor_timestamps.py` — pre-assemble SAFETY NET (2026-08 新增，连续 2 视频复现
+  后固化)：翻译 agent 偶尔改动/整体 +1 偏移时间戳，verify 查不到，assemble 才报
+  `timestamp changed`。本脚本按 idx 从 canonical `subtitle_meta.json` 重锚全部 trans
+  行时间戳（保留 EN/ZH 文本），自动备份到 parts/trans_backup/；assemble 前跑一次零成本
 - `assemble_final.py` — merge translated chunks → bilingual .ass + validation
 - `deoverlap.py` — (rare) give windowless lines a minimum visible window; NEVER
   de-overlaps starts, so audio alignment is always preserved
@@ -282,3 +404,9 @@ English is in the `.ass`).
 ### references/
 - `translation_prompt.md` — full translation instructions for any Agent's
   built-in model (context-aware, TTS-ready Chinese, exact formats, worked example)
+- `refine_prompt.md` — re-split instructions for the Step 2.5 LLM refine pass,
+  mode B (over-long lines only; semantic clause boundaries, word-preservation
+  rule, worked example)
+- `refine_prompt_full.md` — mode FULL instructions (rewrite the whole block;
+  keep / split / merge adjacent lines; per-part S<seq> output; word-preservation
+  rule, worked example)
