@@ -11,11 +11,11 @@ Two operation modes (controlled by which prepare subcommand you run):
       lines keep aggregate_srt.py's mechanical boundaries. Fast, low-cost,
       fixes the "one line is 30+ words" problem.
 
-  MODE FULL — "full re-split" (see `prepare-full`)
-      EVERY aggregated line is handed to the Agent, which may keep, split, or
-      MERGE adjacent lines, so sentence boundaries are semantic end-to-end
-      (mechanical splits that cut a sentence in half get healed). Higher cost
-      (a full pass of the model before translation), better boundaries.
+  MODE FULL — indexed semantic boundaries (see `prepare-full`)
+      The script labels the immutable global source word stream. The Agent
+      returns sentence-end word IDs plus punctuation only; the script rebuilds
+      exact source text and timestamps. Overlap context lets decisions cross
+      chunk edges without copying or rewriting source words.
 
 The Agent outputs sentence text only — never timestamps. `apply` maps every
 output sentence back onto the SOURCE FRAGMENT timeline with a greedy global
@@ -35,7 +35,8 @@ Usage:
         [--lines-per-part 30] [--context-lines 2]
     # mode FULL
     python3 refine_srt.py prepare-full <sentence_level.srt> <fragments.srt> \
-        [--workdir .] [--max-words 16] [--lines-per-part 40] [--context-lines 2]
+        [--workdir .] [--max-words 16] [--words-per-part 1200] \
+        [--overlap-words 48]
     # apply (works for both modes)
     python3 refine_srt.py apply [--workdir .] [--out transcript_refined.srt]
 
@@ -110,13 +111,30 @@ def assign_fragments(lines: list[tuple[int, int, str]],
 def build_word_seq(frag_idxs: list[int],
                    frags: list[tuple[int, int, str]]) -> list[tuple[str, int]]:
     """Word stream of one line with its source fragment index:
-    [(word, frag_idx), ...]. Speaker markers are stripped (matches aggregate)."""
+    [(word, frag_idx), ...]. Speaker markers are stripped (matches aggregate).
+
+    Words hyphen-split across fragments ("open-" + "weight") are rejoined into
+    one token, because the refinement agents output the joined form; comparing
+    them token-by-token would otherwise fail the whole timeline match.
+    """
     words = []
+    pending: tuple[str, int] | None = None  # (partial word, frag_idx of its start)
     for fi in frag_idxs:
         for w in frags[fi][2].split():
             w2 = re.sub(r">>\s*", "", w)
-            if w2:
-                words.append((w2, fi))
+            if not w2:
+                continue
+            if pending is not None:
+                w2, fi_eff = pending[0] + w2, pending[1]
+                pending = None
+            else:
+                fi_eff = fi
+            if w2.endswith("-"):
+                pending = (w2, fi_eff)
+                continue
+            words.append((w2, fi_eff))
+    if pending is not None:
+        words.append((pending[0].rstrip("-") or pending[0], pending[1]))
     return words
 
 
@@ -134,7 +152,8 @@ def load_global_context(workdir: str) -> dict:
     return ctx
 
 
-def make_chunk_header(ctx: dict, prev_lines: list[str], mode: str) -> str:
+def make_chunk_header(ctx: dict, prev_lines: list[str], mode: str,
+                      commit_range: tuple[int, int] | None = None) -> str:
     h = ["# === GLOBAL CONTEXT (reference only — do NOT translate) ==="]
     if ctx.get("title"):
         h.append(f"# Video: {ctx['title']}")
@@ -144,7 +163,20 @@ def make_chunk_header(ctx: dict, prev_lines: list[str], mode: str) -> str:
         d = ctx["duration_sec"]
         h.append(f"# Duration: {int(d // 60)}m {int(d % 60):02d}s")
     h.append("# Subtitle source: auto-generated ASR (en), aggregated sentence-level")
-    if mode == "full":
+    if mode == "full-boundaries":
+        first, last = commit_range or (0, 0)
+        h += [
+            "# Task: choose semantic sentence END positions for the annotated",
+            "#       source word stream. Do not rewrite or repeat the source.",
+            "# Output: one line per sentence end: W<id>\\t<terminal punctuation>",
+            "#       where punctuation is one of . ? !",
+            f"# Commit range: W{first:06d}-W{last:06d}. Output ends only in",
+            "#       this range; surrounding words are read-only overlap context.",
+            "# Target 5-16 words per sentence. Preserve meaning and avoid leaving",
+            "#       dangling conjunctions. The final video word must be an end",
+            "#       only when it lies inside this file's Commit range.",
+        ]
+    elif mode == "full":
         h += [
             "# Task: rewrite the WHOLE block below into semantically complete",
             "#       sentences. For each line you may KEEP it, SPLIT it into",
@@ -168,7 +200,9 @@ def make_chunk_header(ctx: dict, prev_lines: list[str], mode: str) -> str:
         for ln in prev_lines:
             h.append(f"# {ln.rstrip(chr(10))}")
         h.append("# === END PREVIOUS CHUNK ===")
-    if mode == "full":
+    if mode == "full-boundaries":
+        h.append("# === ANNOTATED WORD STREAM (W<id>:word) ===")
+    elif mode == "full":
         h.append("# === LINES TO REWRITE (idx\\tstart\\tend\\ttext) ===")
     else:
         h.append("# === LINES TO RE-SPLIT (idx\\tstart\\tend\\ttext) ===")
@@ -197,6 +231,30 @@ def _base_plan(args) -> dict:
         "parts": [],
         "output": args.out,
     }
+
+
+def _format_annotated_words(stream: list[tuple[str, int, int]],
+                            lines: list[tuple[int, int, str]], start: int,
+                            end: int, words_per_row: int = 12) -> str:
+    """Word IDs plus source-line timing cues for semantic boundary decisions."""
+    rows = []
+    pos = start
+    while pos < end:
+        line_idx = stream[pos][2]
+        line_start = pos
+        while pos < end and stream[pos][2] == line_idx:
+            pos += 1
+        source_start, source_end, _ = lines[line_idx - 1]
+        label = (f"L{line_idx:05d} {fmt_srt_time(source_start)}-"
+                 f"{fmt_srt_time(source_end)}")
+        first_row = True
+        for row_start in range(line_start, pos, words_per_row):
+            cells = [f"W{i + 1:06d}:{stream[i][0]}"
+                     for i in range(row_start, min(row_start + words_per_row, pos))]
+            rows.append(f"{label if first_row else ' ' * len(label)} | "
+                        + " ".join(cells))
+            first_row = False
+    return "\n".join(rows)
 
 
 def cmd_prepare(args) -> int:
@@ -274,6 +332,13 @@ def cmd_prepare_full(args) -> int:
         log("sentence-level SRT and fragments SRT are both required.")
         return 1
 
+    if args.words_per_part < 100:
+        log("--words-per-part must be at least 100")
+        return 1
+    if args.overlap_words < 0 or args.overlap_words >= args.words_per_part:
+        log("--overlap-words must be >= 0 and smaller than --words-per-part")
+        return 1
+
     lines = read_captions(args.sentence)
     frags = read_captions(args.fragments)
     if not lines or not frags:
@@ -284,35 +349,51 @@ def cmd_prepare_full(args) -> int:
     os.makedirs(parts_dir, exist_ok=True)
     ctx = load_global_context(args.workdir)
 
-    src_lines = []
-    for i in range(len(lines)):
-        s, e, t = lines[i]
-        src_lines.append(f"{i + 1}\t{fmt_srt_time(s)}\t{fmt_srt_time(e)}\t{t}")
+    assignments = assign_fragments(lines, frags)
+    stream, _ = build_global_stream(lines, assignments, frags)
+    total_words = len(stream)
+    if not total_words:
+        log("No words found in source timeline.")
+        return 1
 
-    n = args.lines_per_part
-    total = len(lines)
-    n_parts = (total + n - 1) // n
+    # Core ranges never overlap. Each input includes read-only words on both
+    # sides, so the model can make a good decision at a chunk boundary without
+    # forcing an artificial sentence break there.
+    n = args.words_per_part
+    overlap = args.overlap_words
+    n_parts = (total_words + n - 1) // n
     parts = []
     for p in range(1, n_parts + 1):
-        start_line = (p - 1) * n + 1
-        end_line = min(p * n, total)
-        idxs = list(range(start_line, end_line + 1))
-        prev_start = max(0, start_line - 1 - args.context_lines)
-        prev_lines = src_lines[prev_start:start_line - 1]
-        header = make_chunk_header(ctx, prev_lines, "full")
-        body = "\n".join(src_lines[i - 1] for i in idxs)
+        core_start = (p - 1) * n
+        core_end = min(p * n, total_words)
+        input_start = max(0, core_start - overlap)
+        input_end = min(total_words, core_end + overlap)
+        commit = (core_start + 1, core_end)
+        header = make_chunk_header(ctx, [], "full-boundaries", commit)
+        body = _format_annotated_words(stream, lines, input_start, input_end)
         fname = f"refine_part_{p:02d}.txt"
         with open(os.path.join(parts_dir, fname), "w", encoding="utf-8") as f:
             f.write(header + body + "\n")
-        parts.append({"file": fname, "idxs": idxs})
-        log(f"  {fname}: lines {start_line}-{end_line}")
+        parts.append({
+            "file": fname,
+            "input_start_word": input_start + 1,
+            "input_end_word": input_end,
+            "commit_start_word": core_start + 1,
+            "commit_end_word": core_end,
+            "word_count": input_end - input_start,
+        })
+        log(f"  {fname}: commit W{core_start + 1:06d}-W{core_end:06d}; "
+            f"context W{input_start + 1:06d}-W{input_end:06d}")
 
     plan = _base_plan(args)
-    plan["mode"] = "full"
+    plan["mode"] = "full-boundaries"
+    plan["total_words"] = total_words
+    plan["words_per_part"] = n
+    plan["overlap_words"] = overlap
     plan["parts"] = parts
     _write_plan(plan, args.workdir)
-    log(f"Mode FULL: {n_parts} chunks covering ALL {total} lines.")
-    log("Next: Agent rewrites each refine_part_NN.txt into refined_NN.txt "
+    log(f"Mode FULL boundary-index: {n_parts} chunks covering {total_words} words.")
+    log("Next: Agent writes sentence-end IDs for each refine_part_NN.txt "
         "(see references/refine_prompt_full.md), then run `apply`.")
     return 0
 
@@ -337,8 +418,43 @@ def parse_refined(path: str) -> list[tuple[str, str]]:
     return out
 
 
+def parse_boundary_decisions(path: str) -> list[tuple[int, str]]:
+    """Read compact FULL output: W<global-word-id>\t<.?!>."""
+    out = []
+    with open(path, "r", encoding="utf-8") as f:
+        for ln in f:
+            if not ln.strip() or ln.lstrip().startswith("#"):
+                continue
+            parts = ln.rstrip("\n").split("\t")
+            if len(parts) != 2 or not re.fullmatch(r"W\d+", parts[0].strip()):
+                log(f"WARN: bad boundary line in {os.path.basename(path)}: {ln[:60]!r}")
+                continue
+            punct = parts[1].strip()
+            if punct not in (".", "?", "!"):
+                log(f"WARN: bad punctuation in {os.path.basename(path)}: {punct!r}")
+                continue
+            out.append((int(parts[0].strip()[1:]), punct))
+    return out
+
+
+def _sentence_from_stream(stream: list[tuple[str, int, int]], start: int,
+                          end: int, punct: str) -> str:
+    words = [stream[i][0] for i in range(start, end)]
+    if not words:
+        return ""
+    # Preserve every source token; only normalize the terminal punctuation.
+    words[-1] = re.sub(r"[.,?!;:]+$", "", words[-1]) + punct
+    return " ".join(words)
+
+
 def norm_word(w: str) -> str:
     return re.sub(r"[^a-z0-9']", "", w.lower())
+
+
+# Max stream positions scanned for a single sentence word, and max stream words
+# that may be joined to form one sentence word (see match_sentence).
+MAX_LOOKAHEAD = 8
+MAX_JOIN = 3
 
 
 def _frag_word_starts(stream: list[tuple[str, int, int]]) -> dict[int, int]:
@@ -388,9 +504,17 @@ def build_global_stream(lines: list[tuple[int, int, str]],
 def match_sentence(sentence_words: list[str], stream: list[tuple[str, int, int]],
                    pos: int) -> tuple[int, int]:
     """Greedy match a sentence's words against the global stream from `pos`.
-    Source words that don't match are skipped (treated as deleted by the model).
-    Returns (end_pos, unmatched) where unmatched counts sentence words absent
-    from the remaining stream (model reworded / added content)."""
+
+    Returns (end_pos, unmatched) where unmatched counts sentence words that
+    could not be located.
+
+    Two robustness rules (both matter for real ASR data):
+    * Look-ahead is BOUNDED. An unbounded scan lets one unmatched word drag
+      `end` to the end of the stream, collapsing every later timestamp.
+    * A sentence word may be the join of several stream words: agents write
+      "higher-dimensional" where ASR had "higher dimensional", and
+      "open-weight" where ASR split the word across fragments.
+    """
     end = pos
     unmatched = 0
     n_stream = len(stream)
@@ -399,13 +523,28 @@ def match_sentence(sentence_words: list[str], stream: list[tuple[str, int, int]]
         if not nsw:
             continue
         found = False
-        while end < n_stream:
-            if norm_word(stream[end][0]) == nsw:
+        limit = min(end + MAX_LOOKAHEAD, n_stream)
+        i = end
+        while i < limit:
+            if norm_word(stream[i][0]) == nsw:
+                end = i + 1
                 found = True
-                end += 1
                 break
-            end += 1
+            i += 1
+        if not found:  # one sentence word spanning several stream words
+            for i in range(end, limit):
+                for k in range(2, MAX_JOIN + 1):
+                    if i + k > n_stream:
+                        break
+                    joined = "".join(norm_word(stream[j][0]) for j in range(i, i + k))
+                    if joined == nsw:
+                        end = i + k
+                        found = True
+                        break
+                if found:
+                    break
         if not found:
+            # Advance nothing: a local mismatch must not shift the timeline.
             unmatched += 1
     return end, unmatched
 
@@ -479,7 +618,53 @@ def cmd_apply(args) -> int:
 
     overlong_set = set(plan.get("overlong", []))
 
-    if mode == "full":
+    if mode == "full-boundaries":
+        decisions: list[tuple[int, str]] = []
+        seen: set[int] = set()
+        for part in plan.get("parts", []):
+            rname = part["file"].replace("refine_part_", "refined_")
+            rpath = os.path.join(parts_dir, rname)
+            if not os.path.exists(rpath):
+                continue
+            lo = int(part["commit_start_word"])
+            hi = int(part["commit_end_word"])
+            part_decisions = parse_boundary_decisions(rpath)
+            if not part_decisions:
+                problems.append(f"full boundary mode: no decisions in {rname}")
+                continue
+            for word_id, punct in part_decisions:
+                if not lo <= word_id <= hi:
+                    problems.append(
+                        f"{rname}: W{word_id:06d} outside commit range "
+                        f"W{lo:06d}-W{hi:06d}")
+                    continue
+                if word_id in seen:
+                    problems.append(f"duplicate boundary W{word_id:06d}")
+                    continue
+                seen.add(word_id)
+                decisions.append((word_id, punct))
+
+        decisions.sort()
+        total_words = len(stream)
+        if not decisions or decisions[-1][0] != total_words:
+            got = "none" if not decisions else f"W{decisions[-1][0]:06d}"
+            problems.append(f"final boundary must be W{total_words:06d}; got {got}")
+        texts: list[str] = []
+        prev = 0
+        for word_id, punct in decisions:
+            if word_id <= prev or word_id > total_words:
+                problems.append(f"invalid/non-increasing boundary W{word_id:06d}")
+                continue
+            span = word_id - prev
+            if span > max(plan.get("max_words", 16) * 2, 32):
+                problems.append(
+                    f"sentence ending W{word_id:06d} spans {span} words; "
+                    "likely a missing boundary")
+            text = _sentence_from_stream(stream, prev, word_id, punct)
+            if text:
+                texts.append(text)
+            prev = word_id
+    elif mode == "full":
         # full mode: every refined_NN.txt numbers its sentences S<seq> from 1,
         # so they MUST be read per part (in part order), never merged into one
         # dict (seq keys would collide and later parts would overwrite earlier).
@@ -529,7 +714,8 @@ def cmd_apply(args) -> int:
     if not texts:
         problems.append("no sentences to emit")
 
-    # global greedy match + anchor
+    # global greedy match + anchor. Boundary-index mode reconstructs text from
+    # the exact source stream, so matching is deterministic and unmatched=0.
     n_stream = len(stream)
     frag_starts = _frag_word_starts(stream)
     anchored: list[tuple[int, int, str]] = []
@@ -547,7 +733,11 @@ def cmd_apply(args) -> int:
             total_unmatched += len(words)
             continue
         start = _refined_start(stream, frags, frag_starts, pos)
-        end_pos, unmatched = match_sentence(words, stream, pos)
+        if mode == "full-boundaries":
+            end_pos = min(pos + len(words), n_stream)
+            unmatched = 0
+        else:
+            end_pos, unmatched = match_sentence(words, stream, pos)
         total_unmatched += unmatched
         if end_pos <= pos:  # nothing consumed (all reworded) — take word-count fallback
             end_pos = min(pos + len(words), n_stream)
@@ -639,8 +829,12 @@ def main() -> int:
     p_full.add_argument("--workdir", default=".")
     p_full.add_argument("--max-words", type=int, default=16,
                         help="target cap words per sentence (default 16)")
-    p_full.add_argument("--lines-per-part", type=int, default=40,
-                        help="max source lines per instruction chunk (default 40)")
+    p_full.add_argument("--words-per-part", type=int, default=1200,
+                        help="committed source words per instruction chunk (default 1200)")
+    p_full.add_argument("--overlap-words", type=int, default=48,
+                        help="read-only word context on both chunk sides (default 48)")
+    p_full.add_argument("--lines-per-part", type=int, default=None,
+                        help=argparse.SUPPRESS)
     p_full.add_argument("--context-lines", type=int, default=2,
                         help="tail lines of source shown as PREVIOUS CHUNK (default 2)")
     p_full.add_argument("--manifest", default=None)
