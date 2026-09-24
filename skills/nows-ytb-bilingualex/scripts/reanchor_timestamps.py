@@ -5,9 +5,6 @@ ASS pipeline (nows-ytb-bilingualex skill).
 
 WHY THIS EXISTS
 ---------------
-New compact translation output omits timestamps, so this script is normally a
-no-op. It remains for compatibility with old five-field work directories.
-
 `verify_translation.py` only checks EN-content alignment per idx. It does NOT
 check timestamps. Translation subagents occasionally SHIFT or DROP timestamps
 (this happened on 2 consecutive videos). The drift is invisible to verify but
@@ -72,11 +69,6 @@ def main():
                 out_lines.append(raw)
                 continue
             f = raw.split("\t")
-            if len(f) == 3 and f[0].isdigit():
-                # Compact outputs intentionally have no timestamps. Nothing to
-                # repair; assemble_final.py injects the canonical values.
-                out_lines.append(raw)
-                continue
             if len(f) < 5 or not f[0].isdigit():
                 out_lines.append(raw)
                 continue

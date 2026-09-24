@@ -7,9 +7,9 @@ translation by the Agent's built-in model.
 Outputs (all under the working directory):
   transcript.txt            — one line per subtitle event:
                               <idx>\t<start>\t<end>\t<ENGLISH>
-  parts/part_01.txt ...     — compact model inputs, sized by English word budget:
-                              <idx>\t<duration_seconds>\t<ENGLISH>
-                              Each chunk carries a context header:
+  parts/part_01.txt ...     — chunks of transcript.txt (same format), sized so a
+                              single translation pass stays reliable. Each chunk
+                              carries a context header:
                                 * GLOBAL CONTEXT — video title / URL / duration /
                                   subtitle source (read from the top-level
                                   manifest.json written by download.py), so every
@@ -21,11 +21,11 @@ Outputs (all under the working directory):
   parts/manifest.json       — bookkeeping for the assemble step
   subtitle_meta.json        — parsed ASS header + event count
 
-Canonical timestamps are stored in `subtitle_meta.json`; translation workers do
-not copy them. The final assembler injects them deterministically by idx.
+Timestamps are kept EXACTLY as they appear in the source .ass (H:MM:SS.cc).
+The pipeline never recomputes time — the final .ass reuses these values.
 
 Usage:
-    python3 split_translation.py <subtitle.ass> [--words-per-part 1100]
+    python3 split_translation.py <subtitle.ass> [--lines-per-part 120]
                                  [--context-lines 4] [--out <dir>]
 
 Exit codes: 0 ok, 1 fatal.
@@ -61,33 +61,12 @@ def strip_ass_tags(text: str) -> str:
 
 
 def srt_ts_to_ass(ts: str) -> str:
-    """'HH:MM:SS,mmm' -> 'H:MM:SS.cc' (ASS centiseconds).
-
-    Carry-safe: rounding can land on exactly 100 cs (e.g. .999 -> 100), which
-    must roll over into the next second (.00). The naive
-    `f"{round(ms/10):02d}"` produced illegal 3-digit centiseconds like
-    '0:24:33.100' and assemble_final.py then rejected the whole file
-    (observed 2026-09 on a 70-min video: 16 bad timestamps).
-    """
+    """'HH:MM:SS,mmm' -> 'H:MM:SS.cc' (ASS centiseconds)."""
     ts = ts.strip().replace(",", ".")
     h, m, s = ts.split(":")
-    sec, _, frac = s.partition(".")
-    total_cs = (int(h) * 360000 + int(m) * 6000 + int(sec) * 100
-                + round(float(frac[:3]) / 10))
-    h2, r = divmod(total_cs, 360000)
-    m2, r = divmod(r, 6000)
-    s2, cc = divmod(r, 100)
-    return f"{h2}:{m2:02d}:{s2:02d}.{cc:02d}"
-
-
-def ass_time_seconds(ts: str) -> float:
-    h, m, s = ts.strip().split(":")
-    return int(h) * 3600 + int(m) * 60 + float(s)
-
-
-def model_input_line(idx: int, ev: dict) -> str:
-    duration = max(0.01, ass_time_seconds(ev["end"]) - ass_time_seconds(ev["start"]))
-    return f"{idx}\t{duration:.2f}\t{ev['text']}\n"
+    sec, frac = s.split(".")
+    cc = round(float(frac[:3]) / 1000 * 100) if frac else 0
+    return f"{int(h)}:{int(m):02d}:{int(sec):02d}.{cc:02d}"
 
 
 def parse_srt(path: str) -> tuple[list[dict], list[str]]:
@@ -221,33 +200,19 @@ def build_chunk_header(ctx: dict, part_no: int, start_idx: int, end_idx: int,
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("subtitle", help="path to the source .ass file")
-    ap.add_argument("--words-per-part", type=int, default=1100,
-                    help="target English words per translation chunk (default 1100)")
-    ap.add_argument("--max-lines-per-part", type=int, default=80,
-                    help="safety cap on lines per chunk (default 80)")
-    ap.add_argument("--lines-per-part", type=int, default=None,
-                    help="legacy fixed-size override; disables word-budget chunking")
+    ap.add_argument("--lines-per-part", type=int, default=120,
+                    help="max lines per translation chunk (default 120)")
     ap.add_argument("--context-lines", type=int, default=4,
                     help="how many tail lines of the previous chunk to inject "
                          "as context (default 4, 0 disables)")
     ap.add_argument("--out", default=".", help="working directory")
     args = ap.parse_args()
 
-    if args.words_per_part < 100:
-        log("--words-per-part must be at least 100")
-        return 1
-    if args.max_lines_per_part < 1:
-        log("--max-lines-per-part must be at least 1")
-        return 1
-    if args.lines_per_part is not None and args.lines_per_part < 1:
-        log("--lines-per-part must be at least 1")
-        return 1
-
     if not os.path.exists(args.subtitle):
         log(f"Subtitle file not found: {args.subtitle}")
         return 1
 
-    events, source_header = parse_any(args.subtitle)[:2]
+    events, header = parse_any(args.subtitle)[:2]
     if not events:
         log("No Dialogue events found in the subtitle file.")
         return 1
@@ -264,80 +229,58 @@ def main() -> int:
             f.write(f"{i}\t{ev['start']}\t{ev['end']}\t{ev['text']}\n")
     log(f"Transcript written: {work_path}")
 
-    model_lines = [model_input_line(i, ev) for i, ev in enumerate(events, start=1)]
+    # read work lines once for chunking + context injection
+    with open(work_path, "r", encoding="utf-8") as f:
+        work_lines = f.readlines()
 
     # global context for every chunk
     ctx = load_global_context(args.out)
 
-    # Split by actual English workload instead of a fixed line count. A line
-    # cap remains as a guard against off-by-one failures on extremely short ASR
-    # lines. The legacy flag preserves old callers.
+    # split into parts
+    n = args.lines_per_part
     total = len(events)
-    ranges = []
-    if args.lines_per_part:
-        n = args.lines_per_part
-        ranges = [(s, min(s + n, total)) for s in range(0, total, n)]
-    else:
-        start = 0
-        words = 0
-        for i, ev in enumerate(events):
-            line_words = max(1, len(ev["text"].split()))
-            line_count = i - start
-            if i > start and (words + line_words > args.words_per_part
-                              or line_count >= args.max_lines_per_part):
-                ranges.append((start, i))
-                start, words = i, 0
-            words += line_words
-        if start < total:
-            ranges.append((start, total))
-
-    n_parts = len(ranges)
+    n_parts = (total + n - 1) // n
     parts = []
-    for p, (start_zero, end_zero) in enumerate(ranges, start=1):
-        start_line = start_zero + 1
-        end_line = end_zero
+    for p in range(1, n_parts + 1):
+        start_line = (p - 1) * n + 1
+        end_line = min(p * n, total)
         part_path = os.path.join(parts_dir, f"part_{p:02d}.txt")
 
         # previous-chunk tail lines (context for continuity)
         prev_lines = []
         if args.context_lines > 0 and p > 1:
             prev_start = max(0, start_line - 1 - args.context_lines)
-            prev_lines = model_lines[prev_start:start_line - 1]
+            prev_lines = work_lines[prev_start:start_line - 1]
 
-        chunk_header = build_chunk_header(ctx, p, start_line, end_line, prev_lines)
+        header = build_chunk_header(ctx, p, start_line, end_line, prev_lines)
         with open(part_path, "w", encoding="utf-8") as dst:
-            dst.write(chunk_header)
+            dst.write(header)
             for line_no in range(start_line, end_line + 1):
-                dst.write(model_lines[line_no - 1])
-        part_words = sum(max(1, len(events[i]["text"].split()))
-                         for i in range(start_zero, end_zero))
+                dst.write(work_lines[line_no - 1])
         parts.append({
             "file": os.path.basename(part_path),
             "start_idx": start_line,
             "end_idx": end_line,
             "lines": end_line - start_line + 1,
-            "words": part_words,
         })
-        log(f"  {part_path}: lines {start_line}-{end_line}, {part_words} words"
+        log(f"  {part_path}: lines {start_line}-{end_line}"
             f"{' (+context)' if prev_lines or ctx.get('title') else ''}")
 
     # manifest
     manifest = {
         "source_subtitle": os.path.abspath(args.subtitle),
         "event_count": total,
-        "words_per_part": args.words_per_part,
-        "max_lines_per_part": args.max_lines_per_part,
-        "legacy_lines_per_part": args.lines_per_part,
+        "lines_per_part": n,
         "context_lines": args.context_lines,
         "parts": parts,
         "transcript": os.path.basename(work_path),
-        "output_format": "<idx>\\t<duration_seconds>\\t<text>",
-        "translation_output_format": "<idx>\\t<ENGLISH>\\t<CHINESE>",
+        "output_format": "<idx>\\t<start>\\t<end>\\t<text>",
+        "translation_output_format": "<idx>\\t<start>\\t<end>\\t<ENGLISH>\\t<CHINESE>",
     }
     with open(os.path.join(parts_dir, "manifest.json"), "w", encoding="utf-8") as f:
         json.dump(manifest, f, ensure_ascii=False, indent=2)
 
-    meta = {"header": source_header, "events": events}
+    meta = {"header": header, "events": events}
     with open(os.path.join(args.out, "subtitle_meta.json"), "w", encoding="utf-8") as f:
         json.dump(meta, f, ensure_ascii=False, indent=2)
 

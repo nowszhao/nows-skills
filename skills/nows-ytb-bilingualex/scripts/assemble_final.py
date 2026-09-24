@@ -1,11 +1,8 @@
 #!/usr/bin/env python3
 """
-assemble_final.py — Merge compact translated chunks (parts/trans_NN.txt) into a
+assemble_final.py — Merge translated chunks (parts/trans_NN.txt) back into a
 single bilingual .ass file with `English || Chinese` on every Dialogue line,
 keeping the ORIGINAL timestamps from the source subtitle.
-
-Preferred translation line format is `<idx>\t<English>\t<Chinese>`. Legacy
-five-field lines remain supported; any worker-authored timestamps are ignored.
 
 Also runs integrity checks and fails loudly if anything is broken:
   - every chunk exists and line count matches the part file
@@ -116,23 +113,6 @@ def main() -> int:
     with open(manifest_path, "r", encoding="utf-8") as f:
         manifest = json.load(f)
 
-    # Canonical timestamps are owned by the script, not the model. New compact
-    # translation files contain idx/EN/ZH only. Legacy five-field files remain
-    # readable, but their timestamps are ignored and replaced from metadata.
-    meta_path = os.path.join(args.workdir, "subtitle_meta.json")
-    if not os.path.exists(meta_path):
-        log(f"Canonical subtitle metadata not found: {meta_path}")
-        return 1
-    try:
-        with open(meta_path, "r", encoding="utf-8") as f:
-            meta = json.load(f)
-        src_events = {
-            i: ev for i, ev in enumerate(meta.get("events", []), start=1)
-        }
-    except Exception as e:
-        log(f"Could not load canonical timestamps: {e}")
-        return 1
-
     # collect all translation lines, keyed by idx
     trans_lines: dict[int, list[str]] = {}
     errors: list[str] = []
@@ -151,22 +131,10 @@ def main() -> int:
             )
         for ln in tlines:
             fields = parse_trans_line(ln)
-            if len(fields) == 3:
-                idx_s, en, zh = fields
-            elif len(fields) == 5:  # legacy format
-                idx_s, _, _, en, zh = fields
-            else:
+            if len(fields) != 5:
                 errors.append(f"{tname}: bad field count ({len(fields)}) in line: {ln[:80]!r}")
                 continue
-            if not idx_s.isdigit():
-                errors.append(f"{tname}: non-numeric idx in line: {ln[:80]!r}")
-                continue
-            idx = int(idx_s)
-            ev = src_events.get(idx)
-            if not ev:
-                errors.append(f"{tname}: idx {idx} missing from subtitle_meta.json")
-                continue
-            fields = [idx_s, ev.get("start", ""), ev.get("end", ""), en, zh]
+            idx = int(fields[0])
             if idx in trans_lines:
                 errors.append(f"Duplicate idx {idx} in {tname}")
             trans_lines[idx] = fields
@@ -188,6 +156,18 @@ def main() -> int:
     # error. The correct check is that every timestamp EXACTLY matches the
     # source (inheritance), which is validated below against subtitle_meta.json
     # when available; otherwise only structural sanity is checked.
+    src_events = {}
+    meta_path = os.path.join(args.workdir, "subtitle_meta.json")
+    if os.path.exists(meta_path):
+        try:
+            with open(meta_path, "r", encoding="utf-8") as f:
+                meta = json.load(f)
+            for i, ev in enumerate(meta.get("events", []), start=1):
+                src_events[i] = (ev.get("start"), ev.get("end"))
+        except Exception as e:
+            log(f"WARN: could not load subtitle_meta.json ({e}); "
+                "skipping timestamp-inheritance check")
+
     for idx in sorted(trans_lines):
         fields = trans_lines[idx]
         start, end = fields[1], fields[2]
@@ -203,7 +183,7 @@ def main() -> int:
             errors.append(f"idx {idx}: bad timestamps {start} -> {end}")
         # inheritance check: translated timestamps must equal the source verbatim
         if idx in src_events:
-            src_start, src_end = src_events[idx].get("start"), src_events[idx].get("end")
+            src_start, src_end = src_events[idx]
             if (start, end) != (src_start, src_end):
                 errors.append(
                     f"idx {idx}: timestamp changed! "

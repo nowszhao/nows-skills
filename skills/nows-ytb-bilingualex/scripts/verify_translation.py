@@ -69,16 +69,9 @@ def main() -> int:
     for tf in sorted(glob.glob(os.path.join(args.workdir, "parts", "trans_*.txt"))):
         for line in open(tf, encoding="utf-8"):
             p = line.rstrip("\n").split("\t")
-            if not p or not p[0].isdigit():
+            if len(p) < 5 or not p[0].isdigit():
                 continue
-            if len(p) == 3:
-                idx, en = int(p[0]), p[1]
-            elif len(p) >= 5:  # legacy format
-                idx, en = int(p[0]), p[3]
-            else:
-                print(f"[{os.path.basename(tf)}] malformed line: {line[:90].rstrip()}")
-                bad += 1
-                continue
+            idx, en = int(p[0]), p[3]
             # pure-music placeholder lines are exempt
             if en.strip() in ("", "...", "♪"):
                 continue
