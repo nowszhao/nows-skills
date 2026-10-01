@@ -48,10 +48,14 @@ file "downloads/<任务名>.mp4"
 用 `nows-ytb-vcover` skill（输入原 YouTube 链接）产出每个视频的 `文案.md` + `封面.html`，
 再用无头 Chrome 把 HTML 渲染成 1280×960 的 `封面.png`：
 ```bash
-"/Users/changhozhao/.agent-browser/browsers/chrome-*/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing" \
-  --headless=new --screenshot="封面.png" --window-size=1280,960 "封面.html"
+CHROME=$(ls -d ~/.agent-browser/browsers/chrome-*/Google\ Chrome\ for\ Testing.app/Contents/MacOS/Google\ Chrome\ for\ Testing | tail -1)
+"$CHROME" --headless=new --disable-gpu --no-sandbox --disable-dev-shm-usage \
+  --screenshot="封面.png" --window-size=1280,960 --hide-scrollbars "封面.html"
 ```
-封面标题给用户选（vcover 会产出 3 套方案），选定后再渲染 PNG。
+⚠️ **必须加 `--disable-gpu`**，否则 GPU 进程崩溃、渲染失败（只输出 HTML 不出图）。
+封面 HTML 可直接复用 `vcover/<已有ID>/封面.html` 的样式改文字。
+**封面标题默认直接选用「方案一」，不询问用户**（vcover 仍会在 `文案.md` 里产出 3 套方案备查，
+但只按方案一渲染 `封面.png`）。仅当用户明确要求换方案、或指定自定义标题时，才改用对应方案。
 
 ### Step 4：组装 tasks.json
 ```json
@@ -105,6 +109,7 @@ python ~/.workbuddy/skills/nows-bilibili-push/scripts/set_schedule.py \
 
 | 项 | 值 | 说明 |
 |---|---|---|
+| **封面标题** | vcover **方案一** | **默认自动采用，不询问用户**（除非用户明确要换） |
 | 创作声明 | 内容无需标注 | B站 copyright=3；选"转载"会要求填来源 |
 | 分区 | 保持页面默认（tid=27） | 不要改动 |
 | 定时 | 今天+10天 10:00 | 用户可指定，须在 5分钟~15天 内 |
