@@ -29,6 +29,7 @@ cp -R skills/nows-video-bmxcut ~/.skills/
 cp -R skills/nows-industry-insight ~/.skills/
 cp -R skills/nows-ytb-bilingualex ~/.skills/
 cp -R skills/nows-ytb-vcover ~/.skills/
+cp -R skills/nows-bilibili-push ~/.skills/
 ```
 
 不同智能体的 skills 目录路径不同，请替换为目标路径（如 `~/.workbuddy/skills/`、`~/.claude/skills/` 等）。
@@ -53,6 +54,7 @@ cp -R skills/nows-ytb-vcover ~/.skills/
 | `nows-industry-insight` | 基于《如何快速了解一个行业》方法论，以渗透率判定产业生命周期阶段，按阶段动态分配七大维度（可行性/规模/护城河/盈利/估值/PEST/景气度）分析权重 | 想快速了解一个行业、做投资研究、择业决策、创业评估、建立行业认知时 | 分层级 Markdown 研究报告（快速版/标准版/深度版） | `帮我快速了解新能源汽车行业`<br>`深入调研一下光伏赛道`<br>`预制菜行业怎么样`<br>`SaaS 行业还有没有投资机会` |
 | `nows-ytb-bilingualex` | 下载 YouTube 视频 MP4 + 生成双语（EN ‖ ZH）.ass 字幕，翻译面向中文语音合成（配音），复用浏览器登录态以支持会员/年龄限制视频 | 想下载 YouTube 视频并配上自然的中英双语字幕、用于本地观看或中文配音时 | MP4 视频文件 + 双语 .ass 字幕文件（与 MP4 同名） | `帮我下载这个 YouTube 视频并做双语字幕`<br>`把这个 YT 视频配上中英双语字幕`<br>`下载这个演讲视频，翻译成中文做成 .ass` |
 | `nows-ytb-vcover` | 把 YouTube 视频/播放列表链接一键转化为社媒发布素材：发布文案（长标题/缩略图小标题/简介含原链接·发布时间·内容提炼·标签）+ B 站风格 1280×720 视频封面 HTML，支持单集与批量模式、按视频 ID 建文件夹 | 想把 YouTube 视频做成公众号/小红书/B站等二次分发素材、生成点击率更高的封面、批量产出系列封面与文案时 | `<视频ID>/文案.md` + `<视频ID>/封面.html`（可一键复制纯文本） | `把这个 YouTube 视频做成 B 站封面`<br>`帮我的视频生成发布文案和封面`<br>`把这期播客的 YouTube 链接转成发布素材`<br>`批量生成这个播放列表的封面和文案` |
+| `nows-bilibili-push` | 把 BiliMix(bmx) 已完成配音的视频一条龙投稿到哔哩哔哩：下载 → 生成封面/简介 → 上传并定时发布 | 想把 bmx/配音视频发布到 B站、需要定时发布时 | 已投稿的 B站稿件（默认今天+10天 10:00 定时发布，可指定） | `投稿B站`<br>`帮我发到B站`<br>`B站投稿`<br>`发布到哔哩哔哩`<br>`上传B站并设置定时` |
 
 
 ## 建议
