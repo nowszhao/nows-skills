@@ -31,6 +31,7 @@ cp -R skills/nows-ytb-bilingualex ~/.skills/
 cp -R skills/nows-ytb-vcover ~/.skills/
 cp -R skills/nows-bilibili-push ~/.skills/
 cp -R skills/nows-ytb-bmxtask ~/.skills/
+cp -R skills/nows-ainews-daily ~/.skills/
 ```
 
 不同智能体的 skills 目录路径不同，请替换为目标路径（如 `~/.workbuddy/skills/`、`~/.claude/skills/` 等）。
@@ -57,6 +58,7 @@ cp -R skills/nows-ytb-bmxtask ~/.skills/
 | `nows-ytb-vcover` | 把 YouTube 视频/播放列表链接一键转化为社媒发布素材：发布文案（长标题/缩略图小标题/简介含原链接·发布时间·内容提炼·标签）+ B 站风格 1280×720 视频封面 HTML，支持单集与批量模式、按视频 ID 建文件夹 | 想把 YouTube 视频做成公众号/小红书/B站等二次分发素材、生成点击率更高的封面、批量产出系列封面与文案时 | `<视频ID>/文案.md` + `<视频ID>/封面.html`（可一键复制纯文本） | `把这个 YouTube 视频做成 B 站封面`<br>`帮我的视频生成发布文案和封面`<br>`把这期播客的 YouTube 链接转成发布素材`<br>`批量生成这个播放列表的封面和文案` |
 | `nows-bilibili-push` | 把 BiliMix(bmx) 已完成配音的视频一条龙投稿到哔哩哔哩：下载 → 生成封面/简介 → 上传并定时发布 | 想把 bmx/配音视频发布到 B站、需要定时发布时 | 已投稿的 B站稿件（默认今天+10天 10:00 定时发布，可指定） | `投稿B站`<br>`帮我发到B站`<br>`B站投稿`<br>`发布到哔哩哔哩`<br>`上传B站并设置定时` |
 | `nows-ytb-bmxtask` | 给一个 YouTube 链接，一站走完「下载 MP4 → 生成双语(EN ‖ ZH).ass 字幕 → 提交 bmx 视频配音任务」全流程；背景音乐默认关闭 | 想把 YouTube 视频做成 bmx 配音任务、需要下载+双语字幕+建任务一条龙时 | MP4 视频 + 双语 .ass 字幕（与 MP4 同名）+ 已提交的 bmx 视频任务(task_id) | `下载这个 YouTube 视频并配音`<br>`生成双语字幕并建 bmx 任务`<br>`用 bmx 新建视频任务`<br>`把这个 YT 链接做成配音任务` |
+| `nows-ainews-daily` | 扫描 YouTube 订阅频道近 24 小时 AI 相关视频，用「频道画像 + 视频语义」两层判断筛出真正值得看的，生成带推荐理由与一键复制链接的 HTML 日报 | 想看订阅里今天有哪些值得看的 AI 视频、要一份每日 AI 视频推荐时 | `report-YYYY-MM-DD.html`（卡片式、缩略图可点、每条可复制链接） | `今日 AI 视频日报`<br>`YouTube AI 新闻`<br>`抓一下订阅里的 AI 视频`<br>`AI 视频推荐`<br>`AI 日报` |
 
 
 ## 建议
