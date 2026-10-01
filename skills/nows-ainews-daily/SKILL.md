@@ -30,11 +30,27 @@ description: 扫描 YouTube 订阅频道近 24 小时的 AI 相关视频，用�
 | `reasons.json` | 你的判断产物：picks + rejected |
 | `report-YYYY-MM-DD.html` | 最终日报 |
 
-## 首次初始化（只需做一次）
+Skill 自带一份**默认订阅表和频道画像**（`references/`），首次运行时自动复制到工作目录，所以新机器、新目录开箱即用，不需要 Chrome 登录态。
+
+| Skill 内置文件 | 作用 |
+|---|---|
+| `references/subscriptions.default.tsv` | 默认订阅频道（300 个） |
+| `references/channel_profiles.default.tsv` | 默认频道 AI 画像 |
+
+## 首次初始化
+
+换机器或新目录时，只要跑一次抓取就会自动补齐这两个文件：
 
 ```bash
 mkdir -p youtube-digest
-python3 scripts/fetch_ai_videos.py --dir youtube-digest --refresh-subs --no-enrich
+python3 scripts/fetch_ai_videos.py --dir youtube-digest   # 自动从 references/ 复制订阅表与画像
+```
+
+**只有订阅变了才需要**加 `--refresh-subs`（用 Chrome cookie 重新拉一次订阅并覆盖本地表）。日常跑不要加，省一次抓取且避免依赖登录态。
+
+只有当需要**从零重建频道画像**时（例如接手一个全新的订阅列表）才跑：
+
+```bash
 python3 scripts/build_channel_profiles.py --dir youtube-digest   # 产出 channel_samples.json
 ```
 
@@ -63,8 +79,10 @@ Cloudera, Inc.	adjacent	vendor
 **第 1 步：抓候选**
 
 ```bash
-python3 scripts/fetch_ai_videos.py --dir youtube-digest --hours 24 --refresh-subs
+python3 scripts/fetch_ai_videos.py --dir youtube-digest --hours 24
 ```
+
+（订阅有变动时加 `--refresh-subs`。）
 
 并发扫各频道 RSS feed（300 个频道约 1 分钟）。分层召回：`core`/`adjacent` 全量进候选，`general` 需 ≥1 个关键词，`none` 需 ≥2 个（仅防漏）。每频道每日上限 4 条、`vendor` 限 2 条。脚本会打印候选清单，`tier` 字段是参考，不是结论。
 
@@ -134,8 +152,10 @@ python3 scripts/verify_subscriptions.py --dir youtube-digest --all
 ## 维护
 
 - 脚本输出「未画像频道」说明有新订阅：基于该频道最近视频标题判断定位，追加进 `channel_profiles.tsv`。
-- 频道画像是长期资产，判断错了直接改那一行即可。
+- 频道画像是长期资产，判断错了直接改那一行即可。改完记得同步一份到 `references/channel_profiles.default.tsv`，换机器时才能带上。
+- 订阅增减后跑一次 `--refresh-subs`，并同步到 `references/subscriptions.default.tsv`。
 - 若 `--refresh-subs` 失败（Chrome cookie 不可用），会自动回退到已有 `subscriptions.tsv`，不影响主流程。
+- 注意：`references/` 里的订阅表是个人数据，推送到公开仓库前先确认。
 
 ## 环境问题
 

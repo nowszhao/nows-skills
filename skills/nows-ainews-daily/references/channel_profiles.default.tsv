@@ -1,0 +1,307 @@
+﻿# 频道 AI 相关度画像（人工/Agent 语义判断，非关键词匹配）
+# tier: core=AI 主业 / adjacent=AI 高频出现 / general=技术商业类偶发 AI / none=基本无关
+# 格式: 频道名 <TAB> tier <TAB> 备注（vendor=厂商软文偏多，权重下调）
+Arena AI	core
+靜電的AI研习社	core
+AI DevOps Podcast	core
+Anthropic	core
+DeepLearningAI	core
+Open Data Science and AI Conference	core
+Prompt Engineering	core
+Unsupervised Learning: With Jacob Effron	core
+IBM Technology	core
+Kyle Chalmers | Data + AI	core
+Ontologize	core
+The AI Daily Brief: Artificial Intelligence News	core
+宝玉的技术分享	core
+Matt Wolfe	core
+Sebastian Raschka	core
+The Information Bottleneck	core
+数字黑魔法	core
+AI Engineer	core
+Hung-yi Lee	core
+Andrej Karpathy	core
+New Machina	core
+No Priors: AI, Machine Learning, Tech, & Startups	core
+跟李沐学AI	core
+Greg Kamradt	core
+Latent Space	core
+Riley Brown	core
+Visual AI	core
+Matthew Berman	core
+OpenAI	core
+暗夜飞行	core	AI 编程实践
+Artificial Intelligence - All in One	core	ML 系统课程
+Palantir	adjacent	vendor
+Cloudera, Inc.	adjacent	vendor
+ThoughtSpot	adjacent	vendor
+Databricks	adjacent	vendor
+SiliconANGLE theCUBE	adjacent	vendor 采访多
+Google	adjacent	vendor
+Best Partners TV	adjacent	中文科技商业
+Silicon Valley Vector 硅谷坐标	adjacent
+硅谷101	adjacent
+Stanford Online	adjacent
+Zara Zhang	adjacent
+CJ Gammon	adjacent	AI 工具/设计
+Tiago Forte	adjacent	AI 工作流
+程式猿（AFA）	adjacent
+All-In Podcast	adjacent
+Lenny's Podcast	adjacent
+Lex Fridman	adjacent
+a16z	adjacent
+Sequoia Capital	adjacent
+Y Combinator	adjacent
+所长林超	adjacent
+氪學家	adjacent
+Tina Huang	adjacent
+Vanyar	adjacent
+Sandeep Swadia	adjacent
+Julia McCoy	adjacent	vendor AI 内容营销
+Lisha的数据科学站	adjacent
+LE	adjacent
+乱翻书 | 商业圆桌	adjacent
+Boston Dynamics	adjacent	具身智能
+Figure	adjacent	具身智能
+Unitree Robotics	adjacent	具身智能
+LimX Dynamics	adjacent	具身智能
+Pollen Robotics	adjacent	具身智能
+Engineered Arts	adjacent	具身智能
+Dan Makes Things	adjacent	桌面机器人
+The Linux Foundation	general
+Dagster	general
+WsCube Tech	general
+全栈派	general
+BlackRock	general
+Dan Olsen	general
+Eventual	general
+Net Ninja	general
+PingCAP, the company behind TiDB	general
+Programming with Mosh	general
+ByteByteGo	general
+NetworkChuck	general
+Palantir Developers	general
+ClickHouse	general
+CNBC	general
+Domain-Driven Design Europe	general
+FlutterFlow	general
+TechWorld with Nana	general
+Welch Labs	general
+硅谷大舅	general
+Tinyfool的胡说八道	general
+磊土视界	general
+3Blue1Brown	general
+Amazon Web Services	general
+ColdFusion	general
+Domain-Driven Design Taiwan	general
+Flutter	general
+JCConf Taiwan	general
+Vox	general
+Aced (formerly Exponent)	general
+IT k Funde	general
+Sparx Systems	general
+Lex Clips	general
+Marques Brownlee	general
+MIT OpenCourseWare	general
+NextGen Learning	general
+WANdisco	general
+Apple	general
+Kurzgesagt – In a Nutshell	general
+TED-Ed	general
+TED	general
+CrashCourse	general
+Real Engineering	general
+SmarterEveryDay	general
+Vsauce	general
+Mark Rober	general
+Marques Brownlee	general
+melodysheep	general
+SpaceX	general
+Giant Cutie	general	航天科普
+海伦子Hellen	general
+PowerfulJRE	general
+The Diary Of A CEO	general
+The Knowledge Project Podcast	general
+Rich Roll	general
+Bloomberg Originals	general
+小Lin说	general
+睡前消息	general
+老高與小茉 Mr & Mrs Gao	general
+脑总MrBrain	general
+Web3101	none	crypto
+币圈90后	none	crypto
+深潮TechFlow 小剧场	none	crypto
+区块链大表姐Camille	none	crypto
+邦妮區塊鏈 Bonnie Blockchain	none	crypto
+腦哥 Chill塊鏈	none	crypto
+區塊鏈日報 Blockchain Daily	none	crypto
+加密老董 crypto_laodong	none	crypto
+MarsCrypto	none	crypto
+Vic TALK	none	crypto
+KK投研所	none	crypto
+Oasis中文频道	none	crypto
+E卫兵💂	none	crypto
+AntCaveClub	none	crypto
+Bankless	none	crypto
+All For Research	none	crypto
+Alex Becker's Channel	none	crypto
+金融汪	none	投资
+ALittleFinance	none	投资
+新财知道	none	投资
+Joy Liu	none	投资
+Nobody Knows Anything	none	投资
+亿万富豪养成计划	none	投资
+布欧的量化日记	none	投资
+The Tonight Show Starring Jimmy Fallon	none	政治脱口秀
+TheEllenShow	none
+Little Big Shots	none
+Qingyise Stand-up Comedy	none
+Wong Fu Productions	none
+FUNG BROS.	none
+Jingwu Show	none
+Uncovering	none
+SoulPancake	none
+Psych2Go	none
+Charisma on Command	none
+Brooks Gibbs	none
+How to DAD	none
+TheDadLab	none
+Tal Ben-Shahar | Happiness Studies Academy	none
+Thomas Frank	none
+Online PM Courses - Mike Clayton	none
+AJ&Smart	none
+Paddy Galloway	none
+5-Minute Crafts	none
+MrBeast	none
+The ACE Family	none
+Supercar Blondie	none
+City Walks	none
+Walking Alice	none
+Watched Walker	none
+Jonna Jinton	none
+Nature Relaxation Films	none
+Scenic Relaxation	none
+Free Music - music for content creators	none
+DUST	none
+NPR's Skunk Bear	none
+Radiolab	none
+Ink Explainer	none
+Simply Explained	none
+Space Matters	none
+Real Engineering	none
+Sabin Civil Engineering	none
+Mr Innovative	none
+Hafu Go	none
+Joeman	none
+Wilson說給你聽	none
+Tailosive Tech	none
+Brandon Butch	none
+TSLA99T	none
+Jules Acree	none
+Christina Donnelly	none
+Charmless Charmander	none
+Ariannita la Gringa	none
+She's Danni	none
+Amimisu 	none
+Back To School	none
+China History	none
+Consciousness and Cognition	none
+Dasheng Community	none
+HereIsAleph_旧闻如是说	none
+Meditation Math	none
+Wenjing Chu	none
+一口新飯	none
+課代表立正	none
+课代表立正	none
+小赫旅行日记官方频道	none
+东哥澳洲移民生活频道	none
+亲子阅读ReadForKid	none
+信息素的信息	none
+信誓蛋蛋 - dandan	none
+克雷兒 Claire	none
+口语老炮儿马思瑞 Laoma Chris	none
+史图馆Histodome	none
+听书财富	none
+壹读iRead - 轻幽默·有情趣	none
+大问题Dialectic	none
+小白豆干看世界	none
+崔永元	none
+嵐奇哲学philosophy	none
+张君学习圈	none
+彭导分享	none
+思維咖啡	none
+有点意思	none
+李子柒 Liziqi	none
+杨利辉	none
+樊登讀書	none
+每日一书	none
+王德峰	none
+科学声音	none
+科學漫聊	none
+細品動漫社	none
+老梁	none
+老肉雜談	none
+老鳴TV	none
+英语兔	none
+親子風潮 Wind Kids	none
+講三種語言的日本人 Makoto	none
+路上读书 · 精读全球好书	none
+阿冉	none
+青蛙刀圣1993	none
+靠谱讲书App	none
+魏知超啥书都读	none
+文森說書	none
+臺大演講網	none
+罗振宇-罗辑思维 -  Luogic TalkShow	none
+20岁了还没去过星巴克	none
+Cocomelon - Nursery Rhymes	none
+Ms Rachel - Toddler Learning Videos	none
+Sesame Street	none
+Art for Kids Hub	none
+KIDS crafts	none
+Kids Pang TV English	none
+Like Nastya	none
+Leo and Tig	none
+Little Fox Chinese - Stories & Songs for Learners	none
+Rock 'N Learn	none
+T-Series Kids Hut	none
+STEVE AND MAGGIE	none
+TeeniepingTV	none
+Little Big Shots	none
+Little yellow egg	none
+Ruby Bonnie Granny	none
+Legend CLS	none
+XiaoMingTalk	none
+7ESL Learning English	none
+BBC Learning English	none
+BBC World Service	none
+C's English Corner 英文角落	none
+CasiCreativo English	none
+EllaTalks | Ella聊美语	none
+Eng Wit	none
+English Learning Hub	none
+English Singsing	none
+English with Lucy	none
+EnglishAnyone	none
+EnglishBridge	none
+Kendra's Language School	none
+Learn English with Bob the Canadian	none
+Learn English with EnglishClass101.com	none
+Learn English With TV Series	none
+Listening Time	none
+Luke's English Podcast	none
+Nate -Onion English	none
+Rachel's English	none
+Speak English With Vanessa	none
+VibeEnglish	none
+WooEnglish - learn english through story	none
+zaharaEnglish	none
+Zoe.languages	none
+Tiếng Anh cùng Sunny	none
+Английский язык с нуля до продвинутого	none
+Tinyfool的英语学习之路	none
+North American Interview	none
+Andrew Huberman	none
+Apple	none
+Cleo Abram	none
+Riverside Study Club	none	宗教/密宗内容

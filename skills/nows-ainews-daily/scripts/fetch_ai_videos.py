@@ -97,6 +97,20 @@ def load_subscriptions(path: Path):
     return out
 
 
+SKILL_ROOT = Path(__file__).resolve().parent.parent
+DEFAULT_SUBS = SKILL_ROOT / "references" / "subscriptions.default.tsv"
+DEFAULT_PROFILES = SKILL_ROOT / "references" / "channel_profiles.default.tsv"
+
+
+def ensure_seeded(base: Path):
+    """工作目录缺文件时,用 Skill 内置的默认订阅表与频道画像补齐。"""
+    for target, src in ((base / "subscriptions.tsv", DEFAULT_SUBS),
+                        (base / "channel_profiles.tsv", DEFAULT_PROFILES)):
+        if not target.exists() and src.exists():
+            shutil.copy(src, target)
+            print(f"[*] 从 Skill 内置文件初始化 {target.name}", file=sys.stderr)
+
+
 def load_profiles(path: Path):
     """频道画像:规范化频道名 -> {tier, note}。"""
     out = {}
@@ -222,6 +236,7 @@ def main():
     SUBS_FILE = BASE / "subscriptions.tsv"
     PROFILES_FILE = BASE / "channel_profiles.tsv"
     out_path = Path(args.out) if args.out else BASE / "candidates.json"
+    ensure_seeded(BASE)
 
     subs = []
     if args.refresh_subs:
