@@ -83,7 +83,8 @@ def main() -> int:
     ap.add_argument("--duration", default=None, help="预知时长，如 1894 或 01:23:45")
     ap.add_argument("--subtitle-mode", default="bilingual",
                     choices=["bilingual", "chinese_only", "none"])
-    ap.add_argument("--subtitle-font-size", default=None, help="字幕字号，默认 20")
+    ap.add_argument("--subtitle-font-size", type=int, default=40,
+                    help="字幕字号，默认 40（bmx 服务端默认是 20，必须显式覆盖）")
     ap.add_argument("--keep-bgm", action="store_true",
                     help="保留原视频背景音乐（默认关闭）")
     ap.add_argument("--bmx", default=None, help="bmx 可执行文件路径")

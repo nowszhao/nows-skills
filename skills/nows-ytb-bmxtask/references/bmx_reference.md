@@ -71,7 +71,7 @@ bmx task submit \
 | `--video-url` | 直接给 YouTube URL，让服务端自己下（本机已能下载时不必用） |
 | `--subtitle-path` | 外部双语 ASS；**提供后服务端跳过转录和翻译，直接拿字幕配音** |
 | `--subtitle-mode` | `bilingual` / `chinese_only` / `none`，默认 `bilingual` |
-| `--subtitle-font-size` | 默认 20 |
+| `--subtitle-font-size` | 服务端默认 **20**；**本项目要求 40**，必须显式传（2026-10-09 用户指定） |
 | `--duration` | 预知时长，`1894` 或 `01:23:45`，可选但建议给 |
 | `--keep-bgm` | **保留原视频背景音乐。不加 = 关闭 BGM（默认行为）** |
 | `--skip-confirm` | 跳过人工确认，是默认行为；`--no-skip-confirm` 才要人工确认 |
