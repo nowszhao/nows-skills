@@ -1,307 +1,168 @@
-﻿# 频道 AI 相关度画像（人工/Agent 语义判断，非关键词匹配）
+# 频道 AI 相关度画像（人工/Agent 语义判断, 非关键词匹配）
 # tier: core=AI 主业 / adjacent=AI 高频出现 / general=技术商业类偶发 AI / none=基本无关
-# 格式: 频道名 <TAB> tier <TAB> 备注（vendor=厂商软文偏多，权重下调）
+# 格式: 频道名 <TAB> tier <TAB> 备注（vendor=厂商软文偏多, 权重下调）
+# 与 subscriptions.default.tsv 一一对应; 频道名需与该表完全一致才能命中
+Matt Wolfe	core	AI 工具与新闻
+Matthew Berman	core	模型实测
+AI Explained	core	怀疑派深度解读
+Wes Roth	core	AI 快评
+The AI Daily Brief	core	每日 AI 要闻
+TheAIGRID	core	发布速报
+TechLinked	core	科技速递
+ColdFusion	core	产业纪录片
+Moore's Law Is Dead	core	芯片爆料 传闻需甄别
+Theoretically Media	core	AI 视频实测
+Dot CSV	core	西语 AI 解读
+Futurepedia	core	AI 工具目录
+Skill Leap AI	core	工具全功能教程
+All About AI	core	GenAI 通识
+MattVidPro AI	core	图像视频模型
+bycloud	core	LLM 架构 论文拆解
+3Blue1Brown	core	数学直觉
+Andrej Karpathy	core	深度学习课程
+Two Minute Papers	core	论文速览
+Yannic Kilcher	core	论文精读
+Machine Learning Street Talk	core	硬核研究访谈
+MIT OpenCourseWare	core	公开课录像
+Stanford Online	core	CS229/231N/224N
+Alexander Amini	core	MIT 6.S191
+DeepLearning.AI	core	吴恩达短课
+Google DeepMind	core	科研一手发布
+StatQuest with Josh Starmer	core	统计与 ML 基础
+Normalized Nerd	core	概率与 LLM 数学
+CampusX	core	数据科学系统课
+Krish Naik	core	ML 实战
+Steve Brunton	core	应用数学
+Welch Labs	core	神经网络数学
+Luis Serrano Academy	core	几何直觉讲网络
+Sebastian Raschka	core	从零构建 LLM
+MIT CSAIL	core	论文演示与访谈
+Fireship	core	100 秒速览 行业快评
+freeCodeCamp.org	core	免费长课
+sentdex	core	Python ML 实战
+Theo - t3.gg	core	开发者视角实测
+OpenAI	core	官方一手 vendor
+Anthropic	core	Claude/MCP 官方 vendor
+Hugging Face	core	开源模型生态
+LangChain	core	Agent 工程化
+IBM Technology	core	大厂工程视角 vendor
+AI Engineer	core	大会演讲档案
+Cole Medin	core	Agent 编排
+IndyDevDan	core	agentic engineering
+Matt Pocock	core	AI 编码工程纪律
+AI Jason	core	上下文工程
+Sam Witteveen	core	新模型上手
+Daniel Bourke	core	PyTorch 与本地推理
+NVIDIA Developer	core	CUDA 与智能体 vendor
+Google Cloud Tech	core	Gemini/ADK vendor
+Cursor	core	AI 编码工具官方 vendor
+PyTorch	core	框架官方
+Latent Space	core	AI 工程播客
+Nate Herk	core	n8n 无代码 Agent
+Liam Ottley	core	AI 代理商商业模式
+Nick Saraev	core	Make.com 深度
+David Ondrej	core	低代码 Agent
+Leon van Zyl	core	n8n 细粒度教程
+Jono Catliff	core	企业流程自动化
+Jack Roberts	core	自动化生意案例
+Dave Ebbelaar	core	原型到生产
+Jeff Su	core	职场 AI 提效
+The AI Advantage	core	提示词与工作流
+Sabrina Ramonov	core	提示词模板
+Kevin Stratvert	core	非技术向分步教程
+Greg Isenberg	core	AI 创业方向
+Julia McCoy	adjacent	AI 内容营销 vendor
+Nathan Gotch	adjacent	AI SEO
+Y Combinator	adjacent	创业与投资
+Tina Huang	adjacent	数据岗与 AI 工具
+李宏毅 Hung-yi Lee	core	华语 ML 公开课
+硅谷101	core	中文 AI 深度报道
+老石谈芯	core	芯片与算力科普
+稚晖君	adjacent	具身智能 硬件工程
+回到Axton	core	AI 系统方法论
+跟李沐学AI	core	中文论文精读
+秋芝2046	core	中文 AI 工具教学
+AI超元域	core	大模型实测
+张小珺商业访谈录	core	中文 AI 长访谈
+WhynotTV	core	中文 AI 播客
+程序员鱼皮	core	中文 AI 编程
+林軒田 Hsuan-Tien Lin	core	ML 理论经典
+王树森 Shusen Wang	core	深度学习系统课
+宝玉的技术分享	core	中文 AI 一手信息
+Aitrepreneur	core	ComfyUI 本地部署
+Olivio Sarikas	core	AI 绘画 设计视角
+Suno Music	core	AI 音乐 vendor
+ElevenLabs	core	AI 语音 vendor
+Runway	core	AI 视频 vendor
+Boston Dynamics	adjacent	具身智能
+Waymo	adjacent	自动驾驶
+Robert Miles AI Safety	core	AI 安全与对齐
+80,000 Hours	adjacent	AI 风险与长期主义
+Stanford HAI	adjacent	AI 政策与社会影响
+Lex Fridman	adjacent	长访谈
+Dwarkesh Patel	adjacent	深度访谈
+Perplexity	core	AI 搜索 vendor
+a16z	adjacent	AI 投资与趋势
+Sequoia Capital	adjacent	创投访谈 vendor
+Thu Vu	adjacent	数据科学职业
+Ken Jee	adjacent	数据科学求职
+Data Professor	adjacent	Python/ML 教学
+AI Coffee Break with Letitia	core	论文可视化精讲
+Weights & Biases（现 CoreWeave）	core	MLOps 与评测 vendor
+AI at Meta	core	Llama 研究 vendor
+1littlecoder	core	本地 LLM 实操
+Nicholas Renotte	core	CV/深度学习工程
+Jay Alammar	core	架构可视化
+Umar Jamil	core	硬核实现 已停更
+量子位	core	中文 AI 资讯
+Koji杨远骋（十字路口）	adjacent	中文 AI 创业访谈 具身智能
 Arena AI	core
 靜電的AI研习社	core
 AI DevOps Podcast	core
-Anthropic	core
-DeepLearningAI	core
 Open Data Science and AI Conference	core
 Prompt Engineering	core
 Unsupervised Learning: With Jacob Effron	core
-IBM Technology	core
 Kyle Chalmers | Data + AI	core
 Ontologize	core
-The AI Daily Brief: Artificial Intelligence News	core
-宝玉的技术分享	core
-Matt Wolfe	core
-Sebastian Raschka	core
 The Information Bottleneck	core
-数字黑魔法	core
-AI Engineer	core
-Hung-yi Lee	core
-Andrej Karpathy	core
 New Machina	core
-No Priors: AI, Machine Learning, Tech, & Startups	core
-跟李沐学AI	core
-Greg Kamradt	core
-Latent Space	core
 Riley Brown	core
 Visual AI	core
-Matthew Berman	core
-OpenAI	core
+Greg Kamradt	core
+数字黑魔法	core
 暗夜飞行	core	AI 编程实践
 Artificial Intelligence - All in One	core	ML 系统课程
-Palantir	adjacent	vendor
-Cloudera, Inc.	adjacent	vendor
-ThoughtSpot	adjacent	vendor
-Databricks	adjacent	vendor
-SiliconANGLE theCUBE	adjacent	vendor 采访多
-Google	adjacent	vendor
-Best Partners TV	adjacent	中文科技商业
+No Priors: AI, Machine Learning, Tech, & Startups	core
+Palantir	adjacent	vendor vendor
+Cloudera, Inc.	adjacent	vendor vendor
+ThoughtSpot	adjacent	vendor vendor
+Databricks	adjacent	vendor vendor
+SiliconANGLE theCUBE	adjacent	vendor 采访多 vendor 采访多
+Google	adjacent	vendor vendor
+Best Partners TV	adjacent	中文科技商业 中文科技商业
 Silicon Valley Vector 硅谷坐标	adjacent
-硅谷101	adjacent
-Stanford Online	adjacent
 Zara Zhang	adjacent
-CJ Gammon	adjacent	AI 工具/设计
-Tiago Forte	adjacent	AI 工作流
+CJ Gammon	adjacent	AI 工具/设计 AI 工具/设计
+Tiago Forte	adjacent	AI 工作流 AI 工作流
 程式猿（AFA）	adjacent
 All-In Podcast	adjacent
 Lenny's Podcast	adjacent
-Lex Fridman	adjacent
-a16z	adjacent
-Sequoia Capital	adjacent
-Y Combinator	adjacent
 所长林超	adjacent
 氪學家	adjacent
-Tina Huang	adjacent
 Vanyar	adjacent
 Sandeep Swadia	adjacent
-Julia McCoy	adjacent	vendor AI 内容营销
 Lisha的数据科学站	adjacent
 LE	adjacent
 乱翻书 | 商业圆桌	adjacent
-Boston Dynamics	adjacent	具身智能
-Figure	adjacent	具身智能
-Unitree Robotics	adjacent	具身智能
-LimX Dynamics	adjacent	具身智能
-Pollen Robotics	adjacent	具身智能
-Engineered Arts	adjacent	具身智能
-Dan Makes Things	adjacent	桌面机器人
-The Linux Foundation	general
-Dagster	general
-WsCube Tech	general
-全栈派	general
-BlackRock	general
-Dan Olsen	general
-Eventual	general
-Net Ninja	general
-PingCAP, the company behind TiDB	general
-Programming with Mosh	general
+Figure	adjacent	具身智能 具身智能
+Unitree Robotics	adjacent	具身智能 具身智能
 ByteByteGo	general
-NetworkChuck	general
-Palantir Developers	general
-ClickHouse	general
-CNBC	general
-Domain-Driven Design Europe	general
-FlutterFlow	general
-TechWorld with Nana	general
-Welch Labs	general
-硅谷大舅	general
-Tinyfool的胡说八道	general
-磊土视界	general
-3Blue1Brown	general
 Amazon Web Services	general
-ColdFusion	general
-Domain-Driven Design Taiwan	general
-Flutter	general
-JCConf Taiwan	general
-Vox	general
-Aced (formerly Exponent)	general
-IT k Funde	general
-Sparx Systems	general
-Lex Clips	general
-Marques Brownlee	general
-MIT OpenCourseWare	general
-NextGen Learning	general
-WANdisco	general
-Apple	general
-Kurzgesagt – In a Nutshell	general
-TED-Ed	general
-TED	general
-CrashCourse	general
+Dagster	general
+ClickHouse	general
+Palantir Developers	general
 Real Engineering	general
-SmarterEveryDay	general
-Vsauce	general
-Mark Rober	general
 Marques Brownlee	general
-melodysheep	general
-SpaceX	general
-Giant Cutie	general	航天科普
-海伦子Hellen	general
-PowerfulJRE	general
-The Diary Of A CEO	general
-The Knowledge Project Podcast	general
-Rich Roll	general
-Bloomberg Originals	general
 小Lin说	general
-睡前消息	general
-老高與小茉 Mr & Mrs Gao	general
 脑总MrBrain	general
-Web3101	none	crypto
-币圈90后	none	crypto
-深潮TechFlow 小剧场	none	crypto
-区块链大表姐Camille	none	crypto
-邦妮區塊鏈 Bonnie Blockchain	none	crypto
-腦哥 Chill塊鏈	none	crypto
-區塊鏈日報 Blockchain Daily	none	crypto
-加密老董 crypto_laodong	none	crypto
-MarsCrypto	none	crypto
-Vic TALK	none	crypto
-KK投研所	none	crypto
-Oasis中文频道	none	crypto
-E卫兵💂	none	crypto
-AntCaveClub	none	crypto
-Bankless	none	crypto
-All For Research	none	crypto
-Alex Becker's Channel	none	crypto
-金融汪	none	投资
-ALittleFinance	none	投资
-新财知道	none	投资
-Joy Liu	none	投资
-Nobody Knows Anything	none	投资
-亿万富豪养成计划	none	投资
-布欧的量化日记	none	投资
-The Tonight Show Starring Jimmy Fallon	none	政治脱口秀
-TheEllenShow	none
-Little Big Shots	none
-Qingyise Stand-up Comedy	none
-Wong Fu Productions	none
-FUNG BROS.	none
-Jingwu Show	none
-Uncovering	none
-SoulPancake	none
-Psych2Go	none
-Charisma on Command	none
-Brooks Gibbs	none
-How to DAD	none
-TheDadLab	none
-Tal Ben-Shahar | Happiness Studies Academy	none
-Thomas Frank	none
-Online PM Courses - Mike Clayton	none
-AJ&Smart	none
-Paddy Galloway	none
-5-Minute Crafts	none
-MrBeast	none
-The ACE Family	none
-Supercar Blondie	none
-City Walks	none
-Walking Alice	none
-Watched Walker	none
-Jonna Jinton	none
-Nature Relaxation Films	none
-Scenic Relaxation	none
-Free Music - music for content creators	none
-DUST	none
-NPR's Skunk Bear	none
-Radiolab	none
-Ink Explainer	none
-Simply Explained	none
-Space Matters	none
-Real Engineering	none
-Sabin Civil Engineering	none
-Mr Innovative	none
-Hafu Go	none
-Joeman	none
-Wilson說給你聽	none
-Tailosive Tech	none
-Brandon Butch	none
-TSLA99T	none
-Jules Acree	none
-Christina Donnelly	none
-Charmless Charmander	none
-Ariannita la Gringa	none
-She's Danni	none
-Amimisu 	none
-Back To School	none
-China History	none
-Consciousness and Cognition	none
-Dasheng Community	none
-HereIsAleph_旧闻如是说	none
-Meditation Math	none
-Wenjing Chu	none
-一口新飯	none
-課代表立正	none
-课代表立正	none
-小赫旅行日记官方频道	none
-东哥澳洲移民生活频道	none
-亲子阅读ReadForKid	none
-信息素的信息	none
-信誓蛋蛋 - dandan	none
-克雷兒 Claire	none
-口语老炮儿马思瑞 Laoma Chris	none
-史图馆Histodome	none
-听书财富	none
-壹读iRead - 轻幽默·有情趣	none
-大问题Dialectic	none
-小白豆干看世界	none
-崔永元	none
-嵐奇哲学philosophy	none
-张君学习圈	none
-彭导分享	none
-思維咖啡	none
-有点意思	none
-李子柒 Liziqi	none
-杨利辉	none
-樊登讀書	none
-每日一书	none
-王德峰	none
-科学声音	none
-科學漫聊	none
-細品動漫社	none
-老梁	none
-老肉雜談	none
-老鳴TV	none
-英语兔	none
-親子風潮 Wind Kids	none
-講三種語言的日本人 Makoto	none
-路上读书 · 精读全球好书	none
-阿冉	none
-青蛙刀圣1993	none
-靠谱讲书App	none
-魏知超啥书都读	none
-文森說書	none
-臺大演講網	none
-罗振宇-罗辑思维 -  Luogic TalkShow	none
-20岁了还没去过星巴克	none
-Cocomelon - Nursery Rhymes	none
-Ms Rachel - Toddler Learning Videos	none
-Sesame Street	none
-Art for Kids Hub	none
-KIDS crafts	none
-Kids Pang TV English	none
-Like Nastya	none
-Leo and Tig	none
-Little Fox Chinese - Stories & Songs for Learners	none
-Rock 'N Learn	none
-T-Series Kids Hut	none
-STEVE AND MAGGIE	none
-TeeniepingTV	none
-Little Big Shots	none
-Little yellow egg	none
-Ruby Bonnie Granny	none
-Legend CLS	none
-XiaoMingTalk	none
-7ESL Learning English	none
-BBC Learning English	none
-BBC World Service	none
-C's English Corner 英文角落	none
-CasiCreativo English	none
-EllaTalks | Ella聊美语	none
-Eng Wit	none
-English Learning Hub	none
-English Singsing	none
-English with Lucy	none
-EnglishAnyone	none
-EnglishBridge	none
-Kendra's Language School	none
-Learn English with Bob the Canadian	none
-Learn English with EnglishClass101.com	none
-Learn English With TV Series	none
-Listening Time	none
-Luke's English Podcast	none
-Nate -Onion English	none
-Rachel's English	none
-Speak English With Vanessa	none
-VibeEnglish	none
-WooEnglish - learn english through story	none
-zaharaEnglish	none
-Zoe.languages	none
-Tiếng Anh cùng Sunny	none
-Английский язык с нуля до продвинутого	none
-Tinyfool的英语学习之路	none
-North American Interview	none
-Andrew Huberman	none
-Apple	none
-Cleo Abram	none
-Riverside Study Club	none	宗教/密宗内容
+硅谷大舅	general

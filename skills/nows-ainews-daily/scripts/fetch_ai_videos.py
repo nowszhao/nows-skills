@@ -15,6 +15,8 @@ import re
 import shutil
 import subprocess
 import sys
+import time
+import urllib.error
 import urllib.request
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -26,20 +28,45 @@ PROFILES_FILE = BASE / "channel_profiles.tsv"
 RSS_URL = "https://www.youtube.com/feeds/videos.xml?channel_id={cid}"
 
 
-def _find_ytdlp():
+def _ytdlp_candidates():
+    """所有可能的 yt-dlp 路径,按优先级排(首选 PATH,再是常见安装位)。"""
+    seen, out = set(), []
     p = shutil.which("yt-dlp")
-    if p:
-        return p
-    for c in ("/opt/homebrew/bin/yt-dlp", "/usr/local/bin/yt-dlp",
-              str(Path.home() / "miniconda3/bin/yt-dlp"),
-              str(Path.home() / "anaconda3/bin/yt-dlp"),
-              str(Path.home() / ".local/bin/yt-dlp")):
-        if Path(c).exists():
-            return c
-    return "yt-dlp"
+    for c in ([p] if p else []) + [
+        "/opt/homebrew/bin/yt-dlp", "/usr/local/bin/yt-dlp",
+        str(Path.home() / "miniconda3/bin/yt-dlp"),
+        str(Path.home() / "anaconda3/bin/yt-dlp"),
+        str(Path.home() / ".local/bin/yt-dlp"),
+    ]:
+        if c and c not in seen and Path(c).exists():
+            seen.add(c)
+            out.append(c)
+    return out or ["yt-dlp"]
 
 
-YTDLP = _find_ytdlp()
+def _ytdlp_version(exe):
+    """返回 (YYYY, MM, DD) 版本号元组,取不到返回 (0,0,0)。"""
+    try:
+        p = subprocess.run([exe, "--version"], capture_output=True, text=True, timeout=20)
+        m = re.search(r"(\d{4})\.(\d{2})\.(\d{2})", p.stdout)
+        if m:
+            return tuple(int(x) for x in m.groups())
+    except Exception:  # noqa: BLE001
+        pass
+    return (0, 0, 0)
+
+
+def _find_ytdlp():
+    """挑一个真正能用的 yt-dlp:系统里常常同时存在多个版本,
+    旧版(如 homebrew 的 python3.10 版)会因 curl_cffi/SSL 问题整体失败。
+    所以按版本号从新到旧排序,而不是简单取 PATH 里的第一个。"""
+    cands = _ytdlp_candidates()
+    cands.sort(key=_ytdlp_version, reverse=True)
+    return cands
+
+
+YTDLP_CANDIDATES = _find_ytdlp()
+YTDLP = YTDLP_CANDIDATES[0]
 
 # 分层召回策略:关键词只做辅助信号,频道画像才是主判据
 #   core / adjacent -> 窗口内视频全部进入候选(交由语义判断筛)
@@ -149,37 +176,49 @@ def refresh_subscriptions():
 
 
 def fetch_rss(item):
+    """抓单个频道的 RSS。对 5xx / 429 / 超时做退避重试——YouTube 对并发很敏感,
+    不重试的话每次跑都会白白丢掉几十个频道。"""
     name, cid = item
     url = RSS_URL.format(cid=cid)
-    try:
-        req = urllib.request.Request(url, headers=UA)
-        with urllib.request.urlopen(req, timeout=20) as r:
-            raw = r.read()
-        root = ET.fromstring(raw)
-        vids = []
-        for e in root.findall(f"{ATOM}entry"):
-            vid = e.findtext(f"{YT}videoId")
-            title = e.findtext(f"{ATOM}title") or ""
-            pub = e.findtext(f"{ATOM}published") or ""
-            desc = e.findtext(f"{MEDIA}description") or ""
-            if not vid or not pub:
-                continue
-            try:
-                dt = datetime.fromisoformat(pub)
-            except ValueError:
-                continue
-            vids.append({
-                "video_id": vid,
-                "title": title.strip(),
-                "channel": name,
-                "channel_id": cid,
-                "published": dt.astimezone(timezone.utc).isoformat(),
-                "url": f"https://www.youtube.com/watch?v={vid}",
-                "description": (desc or "").strip()[:600],
-            })
-        return name, cid, vids, None
-    except Exception as ex:  # noqa: BLE001
-        return name, cid, [], f"{type(ex).__name__}: {ex}"
+    last = None
+    for attempt in range(3):
+        try:
+            req = urllib.request.Request(url, headers=UA)
+            with urllib.request.urlopen(req, timeout=20) as r:
+                raw = r.read()
+            root = ET.fromstring(raw)
+            vids = []
+            for e in root.findall(f"{ATOM}entry"):
+                vid = e.findtext(f"{YT}videoId")
+                title = e.findtext(f"{ATOM}title") or ""
+                pub = e.findtext(f"{ATOM}published") or ""
+                desc = e.findtext(f"{MEDIA}description") or ""
+                if not vid or not pub:
+                    continue
+                try:
+                    dt = datetime.fromisoformat(pub)
+                except ValueError:
+                    continue
+                vids.append({
+                    "video_id": vid,
+                    "title": title.strip(),
+                    "channel": name,
+                    "channel_id": cid,
+                    "published": dt.astimezone(timezone.utc).isoformat(),
+                    "url": f"https://www.youtube.com/watch?v={vid}",
+                    "description": (desc or "").strip()[:600],
+                })
+            return name, cid, vids, None
+        except urllib.error.HTTPError as ex:
+            last = f"HTTPError: HTTP Error {ex.code}"
+            # 404 = channel_id 失效(改名/合并/注销),重试无意义
+            if ex.code not in (429, 500, 502, 503, 504):
+                break
+            time.sleep(1.5 * (attempt + 1))
+        except Exception as ex:  # noqa: BLE001
+            last = f"{type(ex).__name__}: {ex}"
+            time.sleep(1.0 * (attempt + 1))
+    return name, cid, [], last
 
 
 def match_keywords(text: str):
@@ -192,28 +231,47 @@ def match_keywords(text: str):
     return sorted(hits)
 
 
+# 取元信息的尝试顺序。YouTube 的 bot-check 越来越严,默认 web 客户端常直接
+# 报 "The page needs to be reloaded" / "Sign in to confirm you're not a bot",
+# 而 web_embedded / mweb 客户端仍能拿到(配合 --ignore-no-formats-error,
+# 因为这两个客户端返回的格式列表里没有可下载流,dump-json 会先卡在选格式)。
+ENRICH_STRATEGIES = [
+    ["--cookies-from-browser", "chrome",
+     "--extractor-args", "youtube:player_client=web_embedded"],
+    ["--cookies-from-browser", "chrome",
+     "--extractor-args", "youtube:player_client=mweb"],
+    ["--cookies-from-browser", "chrome"],
+    ["--extractor-args", "youtube:player_client=web_embedded"],
+    [],
+]
+
+
 def enrich(v):
-    """用 yt-dlp 补时长 / 播放量。优先带 Chrome cookie,失败则降级为匿名、再失败就跳过。"""
+    """用 yt-dlp 补时长 / 播放量。按二进制 × 客户端策略依次尝试,拿到就返回。"""
     v.setdefault("thumbnail", f"https://i.ytimg.com/vi/{v['video_id']}/hqdefault.jpg")
     v.setdefault("duration", None)
     v.setdefault("view_count", None)
-    for extra in (["--cookies-from-browser", "chrome"], []):
-        try:
-            p = subprocess.run(
-                [YTDLP, *extra, "--dump-json", "--no-warnings", "--no-playlist",
-                 "--skip-download", v["url"]],
-                capture_output=True, text=True, timeout=90,
-            )
-            d = json.loads(p.stdout)
-            v["duration"] = d.get("duration")
-            v["view_count"] = d.get("view_count")
-            v["like_count"] = d.get("like_count")
-            v["channel_follower_count"] = d.get("channel_follower_count")
-            v["categories"] = d.get("categories")
-            if v["duration"]:
-                return v
-        except Exception:  # noqa: BLE001
-            continue
+    base = ["--dump-json", "--no-warnings", "--no-playlist",
+            "--ignore-no-formats-error", "--skip-download"]
+    for exe in YTDLP_CANDIDATES:
+        for extra in ENRICH_STRATEGIES:
+            try:
+                p = subprocess.run(
+                    [exe, *extra, *base, v["url"]],
+                    capture_output=True, text=True, timeout=90,
+                )
+                d = json.loads(p.stdout)
+                v["duration"] = d.get("duration")
+                v["view_count"] = d.get("view_count")
+                v["like_count"] = d.get("like_count")
+                v["channel_follower_count"] = d.get("channel_follower_count")
+                v["categories"] = d.get("categories")
+                if d.get("description"):
+                    v["description"] = d["description"]
+                if v["duration"]:
+                    return v
+            except Exception:  # noqa: BLE001
+                continue
     # 两条路径都拿不到元信息:通常是尚未开始的直播或已删除的视频
     if not v.get("duration") and not v.get("view_count"):
         v["meta_failed"] = True
@@ -252,7 +310,7 @@ def main():
     print(f"[*] 扫描 {len(subs)} 个频道 ...", file=sys.stderr)
 
     all_vids, failed = [], []
-    with cf.ThreadPoolExecutor(max_workers=24) as ex:
+    with cf.ThreadPoolExecutor(max_workers=12) as ex:
         for name, cid, vids, err in ex.map(fetch_rss, subs):
             if err:
                 failed.append({"channel": name, "channel_id": cid, "error": err})
@@ -291,8 +349,13 @@ def main():
               f"{sorted(set(unprofiled))[:10]}", file=sys.stderr)
 
     if cands and not args.no_enrich:
-        with cf.ThreadPoolExecutor(max_workers=16) as ex:
+        # 并发太高会被 YouTube 判成 bot(表现为整批 meta_failed),压到 8
+        with cf.ThreadPoolExecutor(max_workers=8) as ex:
             cands = list(ex.map(enrich, cands))
+        n_fail = sum(1 for v in cands if v.get("meta_failed"))
+        if n_fail > len(cands) // 2:
+            print(f"[!] 元信息失败 {n_fail}/{len(cands)},多半是 bot-check,重跑一次即可",
+                  file=sys.stderr)
 
     tier_rank = {"core": 0, "adjacent": 1, "general": 2, "unknown": 2, "none": 3}
     cands.sort(key=lambda v: (
