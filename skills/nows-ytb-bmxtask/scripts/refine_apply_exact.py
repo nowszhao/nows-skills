@@ -45,6 +45,11 @@ def read_srt(path):
 
 
 def main():
+    import argparse
+    global WORKDIR
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--workdir", default=WORKDIR)
+    WORKDIR = parser.parse_args().workdir
     official = read_srt(os.path.join(WORKDIR, "transcript_official.srt"))
 
     # Build per-word ownership: (line_start_ms, line_end_ms, idx_in_line, n_words_in_line)
@@ -78,6 +83,10 @@ def main():
         for seq in sorted(seq_map):
             texts.append(seq_map[seq])
 
+    source_words = [w.lower() for _,_,t in official for w in WORD.findall(t)]
+    refined_words = [w.lower() for t in texts for w in WORD.findall(t)]
+    if source_words != refined_words:
+        sys.exit("Exact apply requires identical word sequence, not just word counts")
     # 1:1 consume
     pos = 0
     starts = []
@@ -91,7 +100,7 @@ def main():
         frac = (k / ln) if ln else 0.0
         starts.append(st + (en - st) * frac)
         pos += n
-        end_of_last = en
+        end_of_last = owning[pos-1][1]
     if pos != len(owning):
         sys.exit(f"word mismatch: consumed {pos}, source has {len(owning)}")
 

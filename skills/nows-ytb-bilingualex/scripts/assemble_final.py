@@ -19,6 +19,7 @@ manifest.json), e.g. "Talk.mp4" -> "Talk.ass". Pass --out to override.
 
 Exit codes: 0 ok, 1 fatal (validation failed — do NOT deliver the file).
 """
+from __future__ import annotations
 
 import argparse
 import json
@@ -157,6 +158,7 @@ def main() -> int:
     # source (inheritance), which is validated below against subtitle_meta.json
     # when available; otherwise only structural sanity is checked.
     src_events = {}
+    src_names = {}
     meta_path = os.path.join(args.workdir, "subtitle_meta.json")
     if os.path.exists(meta_path):
         try:
@@ -164,6 +166,7 @@ def main() -> int:
                 meta = json.load(f)
             for i, ev in enumerate(meta.get("events", []), start=1):
                 src_events[i] = (ev.get("start"), ev.get("end"))
+                src_names[i] = ev.get("speaker_id") or ev.get("name", "")
         except Exception as e:
             log(f"WARN: could not load subtitle_meta.json ({e}); "
                 "skipping timestamp-inheritance check")
@@ -203,7 +206,8 @@ def main() -> int:
     out_lines = [header]
     for idx in sorted(trans_lines):
         _, start, end, en, zh = trans_lines[idx]
-        out_lines.append(f"Dialogue: 0,{start},{end},Default,,0,0,0,,{en}{DELIM}{zh}")
+        name = src_names.get(idx, "").replace(",", "_")
+        out_lines.append(f"Dialogue: 0,{start},{end},Default,{name},0,0,0,,{en}{DELIM}{zh}")
 
     out_path = os.path.join(args.workdir, resolve_out_name(args))
     with open(out_path, "w", encoding="utf-8") as f:

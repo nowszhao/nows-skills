@@ -1,3 +1,13 @@
+# 音频优先协议 v1（当前）
+
+- `bmx api --field dubbing_protocol` 必须返回 `1`。
+- `bmx video analyze --server-path <上传MP4路径> --wait`：异步源人物/词级定位，result.analysis 包含 words/turns/references/source_media_sha256/analysis_id。
+- `bmx task submit --type video --server-path <MP4路径> --subtitle-path <工作ASS路径> --dub-manifest <本地JSON> --analysis-id <分析task_id> --ref-select-mode speaker_global`：精翻配音。
+- CLI读取本地manifest为结构化请求，不通过音频上传接口传JSON。
+- 初次合成/恢复/重试均验证参考内容和模型指纹。最终字幕在配音输出时间轴上生成。
+
+以下为兼容命令与历史记录；外部ASS跳过的是转译，不再跳过人物分析。
+
 # bmx 命令参考（BiliMix CLI）
 
 本机路径：`/Users/changhozhao/.workbuddy/binaries/python/envs/default/bin/bmx`

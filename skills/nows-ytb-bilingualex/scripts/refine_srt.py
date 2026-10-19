@@ -41,6 +41,7 @@ Usage:
 
 Exit codes: 0 ok, 1 fatal, 2 validation problems in apply (nothing written).
 """
+from __future__ import annotations
 
 import argparse
 import json
@@ -152,7 +153,7 @@ def make_chunk_header(ctx: dict, prev_lines: list[str], mode: str) -> str:
             "# Output ONE line per final sentence: S<seq>\\t<sentence text>",
             "#       (seq = 1,2,3... in video order, one output line per sentence)",
             "# Keep every word in order across the block (only punctuation may",
-            "#       be added); 5-16 words per sentence; NEVER output timestamps.",
+            "#       be added); Complete speech first; 5-16 words is a soft guide, not a limit. NEVER output timestamps.",
         ]
     else:
         h += [
@@ -300,6 +301,17 @@ def cmd_prepare_full(args) -> int:
         prev_start = max(0, start_line - 1 - args.context_lines)
         prev_lines = src_lines[prev_start:start_line - 1]
         header = make_chunk_header(ctx, prev_lines, "full")
+        analysis_path = os.path.join(args.workdir, "analysis.json")
+        if os.path.exists(analysis_path):
+            from audio_first import load_analysis, canonical_rows
+            analysis = load_analysis(analysis_path)
+            source_rows = canonical_rows(analysis)
+            if [row["text"] for row in source_rows] != [line[2] for line in lines]:
+                raise ValueError("Use import_analysis.py canonical source before FULL refinement")
+            header += "# Same-speaker complete speech may merge/split; NEVER merge different speakers.\n"
+            for idx in idxs:
+                turn = source_rows[idx-1]
+                header += f"# source row {idx}: speaker={turn['speaker']} turn={turn['turn_id']}\n"
         body = "\n".join(src_lines[i - 1] for i in idxs)
         fname = f"refine_part_{p:02d}.txt"
         with open(os.path.join(parts_dir, fname), "w", encoding="utf-8") as f:
@@ -390,7 +402,17 @@ def match_sentence(sentence_words: list[str], stream: list[tuple[str, int, int]]
     """Greedy match a sentence's words against the global stream from `pos`.
     Source words that don't match are skipped (treated as deleted by the model).
     Returns (end_pos, unmatched) where unmatched counts sentence words absent
-    from the remaining stream (model reworded / added content)."""
+    from the remaining stream (model reworded / added content).
+
+    Robustness fixes (2026-09):
+    - A hyphenated refined word ("open-source") is matched against its
+      components ("open", "source") so ASR-corrected hyphenation does not
+      desync the matcher.
+    - If a token cannot be found in the remaining stream it is skipped in place
+      (unmatched += 1) WITHOUT fast-forwarding `end` to stream end. The old
+      behaviour let a single unmatchable token collapse every later sentence
+      into one window; now a local miss only drops that one token.
+    """
     end = pos
     unmatched = 0
     n_stream = len(stream)
@@ -398,15 +420,29 @@ def match_sentence(sentence_words: list[str], stream: list[tuple[str, int, int]]
         nsw = norm_word(sw)
         if not nsw:
             continue
-        found = False
-        while end < n_stream:
-            if norm_word(stream[end][0]) == nsw:
-                found = True
-                end += 1
+        # expand hyphenated tokens into components for matching
+        subs = nsw.split("-") if "-" in nsw else [nsw]
+        saved = end
+        ok = True
+        for sub in subs:
+            scan = saved
+            found = False
+            while scan < n_stream:
+                if norm_word(stream[scan][0]) == sub:
+                    found = True
+                    scan += 1
+                    break
+                scan += 1
+            if not found:
+                ok = False
                 break
-            end += 1
-        if not found:
+            saved = scan
+        if ok:
+            end = saved
+        else:
             unmatched += 1
+            # do NOT advance `end` — a missing token is skipped in place so the
+            # next word resumes from the current position instead of n_stream.
     return end, unmatched
 
 
@@ -529,6 +565,23 @@ def cmd_apply(args) -> int:
     if not texts:
         problems.append("no sentences to emit")
 
+    analysis_path = os.path.join(workdir, "analysis.json")
+    if os.path.exists(analysis_path):
+        if problems:
+            raise ValueError("; ".join(problems))
+        from audio_first import load_analysis, attach_sources
+        sources = attach_sources(texts, load_analysis(analysis_path))
+        output = "\n".join(f"{i}\n{fmt_srt_time(src['start_ms'])} --> {fmt_srt_time(src['end_ms'])}\n{text}\n"
+                           for i, (text, src) in enumerate(zip(texts, sources), 1))
+        out_path = os.path.join(workdir, args.out)
+        with open(out_path, "w", encoding="utf-8") as stream:
+            stream.write(output)
+        import hashlib
+        with open(os.path.join(workdir, "refined_sources.json"), "w", encoding="utf-8") as stream:
+            json.dump({"source_sha256": hashlib.sha256(output.encode()).hexdigest(), "events": sources}, stream, indent=2)
+        log(f"Wrote {len(texts)} speaker-owned utterances -> {out_path}")
+        return 0
+
     # global greedy match + anchor
     n_stream = len(stream)
     frag_starts = _frag_word_starts(stream)
@@ -563,6 +616,10 @@ def cmd_apply(args) -> int:
                 f"only {consumed:.0%} of source words consumed by sentences "
                 f"({pos}/{n_stream}); sentences may be missing")
 
+    if total_unmatched:
+        problems.append(f"{total_unmatched} unmatched words: refusing estimated/collapsed legacy timeline")
+    if any(anchored[i][0] <= anchored[i-1][0] for i in range(1, len(anchored))):
+        problems.append("Repeated/decreasing start timestamps: use aligned source analysis")
     if problems:
         log("VALIDATION PROBLEMS:")
         for p in problems[:40]:

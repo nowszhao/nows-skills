@@ -30,6 +30,7 @@ Usage:
 
 Exit codes: 0 ok, 1 fatal.
 """
+from __future__ import annotations
 
 import argparse
 import glob
@@ -65,8 +66,12 @@ def srt_ts_to_ass(ts: str) -> str:
     ts = ts.strip().replace(",", ".")
     h, m, s = ts.split(":")
     sec, frac = s.split(".")
-    cc = round(float(frac[:3]) / 1000 * 100) if frac else 0
-    return f"{int(h)}:{int(m):02d}:{int(sec):02d}.{cc:02d}"
+    total_cs = round((int(h) * 3600 + int(m) * 60 + int(sec)) * 100 + int(frac[:3].ljust(3, "0"))/10)
+    hours, rem = divmod(total_cs, 360000)
+    minutes, rem = divmod(rem, 6000)
+    seconds, cc = divmod(rem, 100)
+    return f"{hours}:{minutes:02d}:{seconds:02d}.{cc:02d}"
+
 
 
 def parse_srt(path: str) -> tuple[list[dict], list[str]]:
@@ -216,6 +221,18 @@ def main() -> int:
     if not events:
         log("No Dialogue events found in the subtitle file.")
         return 1
+    sources_path = os.path.join(args.out, "refined_sources.json")
+    if os.path.isfile(sources_path):
+        import hashlib
+        with open(sources_path, encoding="utf-8") as stream:
+            source_data = json.load(stream)
+        if hashlib.sha256(open(args.subtitle, "rb").read()).hexdigest() != source_data["source_sha256"]:
+            raise ValueError("Refined source ownership does not match subtitle; re-run speaker-aware apply")
+        if len(source_data["events"]) != len(events):
+            raise ValueError("Source ownership/event count mismatch")
+        for ev, owner in zip(events, source_data["events"]):
+            ev.update(owner)
+            ev["name"] = owner["speaker_id"]
     log(f"Parsed {len(events)} events from {args.subtitle}")
 
     os.makedirs(args.out, exist_ok=True)

@@ -17,8 +17,11 @@ Usage:
 
 Exit codes: 0 ok, 1 致命错误（bmx 缺失/未登录/上传失败/字幕校验失败/提交失败）
 """
+from __future__ import annotations
 
 import argparse
+import os
+import hashlib
 import json
 import shutil
 import subprocess
@@ -74,11 +77,22 @@ def bmx_json(bmx: str, args: list[str], dry_run: bool, field: str | None = None,
     return None, None
 
 
+def resolve_bmx(explicit=None):
+    if explicit or os.environ.get('BILIMIX_CLI'):
+        return explicit or os.environ['BILIMIX_CLI']
+    # Keep the CLI in the selected skill runtime; PATH may contain an older SDK
+    # with a different persisted server address.
+    candidates = [os.path.join(os.path.dirname(sys.executable), 'bmx'),
+                  os.path.expanduser('~/.workbuddy/binaries/python/envs/default/bin/bmx')]
+    return next((p for p in candidates if os.path.isfile(p) and os.access(p, os.X_OK)),
+                shutil.which('bmx'))
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--video", required=True, help="本地 MP4 路径")
-    ap.add_argument("--subtitle", required=True, help="本地双语 ASS 路径（EN || ZH）")
+    ap.add_argument("--subtitle", required=False, help="本地双语 ASS 路径（EN || ZH）")
     ap.add_argument("--title", default=None, help="任务标题（默认取视频文件名）")
     ap.add_argument("--duration", default=None, help="预知时长，如 1894 或 01:23:45")
     ap.add_argument("--subtitle-mode", default="bilingual",
@@ -91,17 +105,34 @@ def main() -> int:
     ap.add_argument("--dry-run", action="store_true", help="只打印命令，不实际执行")
     ap.add_argument("--no-submit", action="store_true",
                     help="只上传并校验字幕，不提交任务（排错/预检用）")
+    ap.add_argument("--analyze-only", action="store_true", help="上传并分析人物，写 analysis.json 后退出")
+    ap.add_argument("--analysis-out", default=None, help="分析结果路径，默认视频目录/analysis.json")
+    ap.add_argument("--dub-manifest", help="build_dub_manifest.py 输出的精翻配音计划")
+    ap.add_argument("--ref-select-mode", default="speaker_global",
+                    choices=["speaker_global", "speaker_local", "segment"])
     ap.add_argument("--debug", action="store_true", help="打印每条命令的原始返回")
     args = ap.parse_args()
 
     global DEBUG
     DEBUG = args.debug
 
-    bmx = args.bmx or shutil.which("bmx")
+    bmx = resolve_bmx(args.bmx)
     if not bmx:
         log("找不到 bmx。请确认它在 PATH 上，或用 --bmx 指定绝对路径。")
         return 1
     log(f"bmx: {bmx}")
+
+    if not args.analyze_only and not args.subtitle and not args.dub_manifest:
+        ap.error("--subtitle or --dub-manifest required")
+    manifest = None
+    if args.dub_manifest:
+        with open(args.dub_manifest, encoding="utf-8") as stream:
+            manifest = json.load(stream)
+    if args.analyze_only or manifest:
+        _, protocol = bmx_json(bmx, ["api"], args.dry_run, field="dubbing_protocol")
+        if not args.dry_run and protocol != "1":
+            log("服务端不支持精翻音频优先协议 v1；请先升级 BiliMix/CLI")
+            return 1
 
     # 1. auth
     auth, _ = bmx_json(bmx, ["auth", "status"], args.dry_run)
@@ -113,40 +144,82 @@ def main() -> int:
 
     # 2. uploads
     paths = {}
+    state_path = os.path.join(os.path.dirname(os.path.abspath(args.video)), "analysis_state.json")
+    def source_hash(path):
+        h = hashlib.sha256()
+        with open(path, "rb") as stream:
+            for block in iter(lambda: stream.read(1024*1024), b""):
+                h.update(block)
+        return h.hexdigest()
+    fingerprint = source_hash(args.video) if not args.dry_run else "dry-run"
+    state = {}
+    if os.path.isfile(state_path):
+        with open(state_path) as stream:
+            state = json.load(stream)
+        if state.get("source_media_sha256") != fingerprint:
+            state = {}
     for kind, path in (("video", args.video), ("subtitle", args.subtitle)):
-        _, val = bmx_json(bmx, ["audio", "upload", path], args.dry_run,
-                          field="local_path")
+        if not path:
+            continue
+        if kind == "video" and state.get("video_server_path"):
+            paths[kind] = state["video_server_path"]
+            continue
+        _, val = bmx_json(bmx, ["audio", "upload", path], args.dry_run, field="local_path")
         if val is None:
             log(f"{kind} 上传失败: {path}")
             return 1
         paths[kind] = val
         log(f"{kind} 服务端路径: {val}")
+    if args.analyze_only:
+        analysis_path = args.analysis_out or os.path.join(os.path.dirname(os.path.abspath(args.video)), "analysis.json")
+        if state.get("analysis_id") and os.path.isfile(analysis_path):
+            log(f"复用人物分析 {state['analysis_id']}；{analysis_path}")
+            return 0
+        res, _ = bmx_json(bmx, ["video", "analyze", "--server-path", paths["video"], "--wait"], args.dry_run)
+        if args.dry_run:
+            return 0
+        analysis = (res or {}).get("result", {}).get("analysis")
+        if not analysis or analysis.get("source_media_sha256") != fingerprint:
+            log("Source analysis failed or source media changed")
+            return 1
+        with open(analysis_path, "w", encoding="utf-8") as stream:
+            json.dump(analysis, stream, ensure_ascii=False, indent=2)
+        state = {"source_media_sha256": fingerprint, "video_server_path": paths["video"],
+                 "analysis_id": analysis["analysis_id"]}
+        with open(state_path, "w") as stream:
+            json.dump(state, stream, indent=2)
+        log(f"人物分析已保存: {analysis_path}；继续 FULL 精翻，不提交配音")
+        return 0
+    if manifest and manifest.get("source_media_sha256") != fingerprint:
+        log("精翻 manifest 与视频内容不匹配")
+        return 1
 
-    # 3. subtitle validation
-    # 注意：bmx_json 返回 (json_obj, field_value)，用 --field 时取第二个元素
-    _, cnt_s = bmx_json(bmx, ["subtitle", "parse", paths["subtitle"]],
-                        args.dry_run, field="count", retries=3)
-    _, bi_s = bmx_json(bmx, ["subtitle", "parse", paths["subtitle"]],
-                       args.dry_run, field="bilingual_count", retries=3)
-    if not args.dry_run:
-        try:
-            cnt, bi = int(cnt_s), int(bi_s)
-        except (TypeError, ValueError):
-            log(f"字幕校验失败：无法读取 count/bilingual_count ({cnt_s}/{bi_s})")
-            return 1
-        if cnt == 0:
-            log("字幕校验失败：服务端解析出 0 行，检查文件是否为有效 ASS。")
-            return 1
-        if bi != cnt:
-            log(f"字幕校验失败：共 {cnt} 行，但只识别出 {bi} 行双语——"
-                f"检查是否每行都用 ' || ' 分隔英文和中文。")
-            return 1
-        log(f"字幕校验通过：{cnt} 行，全部为双语")
-
+    if args.subtitle:
+        # 3. subtitle validation
+        # 注意：bmx_json 返回 (json_obj, field_value)，用 --field 时取第二个元素
+        _, cnt_s = bmx_json(bmx, ["subtitle", "parse", paths["subtitle"]],
+                            args.dry_run, field="count", retries=3)
+        _, bi_s = bmx_json(bmx, ["subtitle", "parse", paths["subtitle"]],
+                           args.dry_run, field="bilingual_count", retries=3)
+        if not args.dry_run:
+            try:
+                cnt, bi = int(cnt_s), int(bi_s)
+            except (TypeError, ValueError):
+                log(f"字幕校验失败：无法读取 count/bilingual_count ({cnt_s}/{bi_s})")
+                return 1
+            if cnt == 0:
+                log("字幕校验失败：服务端解析出 0 行，检查文件是否为有效 ASS。")
+                return 1
+            if bi != cnt:
+                log(f"字幕校验失败：共 {cnt} 行，但只识别出 {bi} 行双语——"
+                    f"检查是否每行都用 ' || ' 分隔英文和中文。")
+                return 1
+            log(f"字幕校验通过：{cnt} 行，全部为双语")
+    
     if args.no_submit:
         log("已指定 --no-submit：只上传并校验，不提交任务")
         print(json.dumps({"video_server_path": paths["video"],
-                          "subtitle_server_path": paths["subtitle"]},
+                          "subtitle_server_path": paths.get("subtitle")},
                          ensure_ascii=False, indent=2))
         return 0
 
@@ -154,11 +227,12 @@ def main() -> int:
     title = args.title or args.video.rsplit("/", 1)[-1].rsplit(".", 1)[0]
     cmd = ["task", "submit", "--type", "video",
            "--server-path", paths["video"]]
-    if args.subtitle_mode != "none":
-        cmd += ["--subtitle-path", paths["subtitle"],
-                "--subtitle-mode", args.subtitle_mode]
-    else:
-        cmd += ["--subtitle-mode", "none"]
+    cmd += ["--subtitle-mode", args.subtitle_mode]
+    if args.subtitle_mode != "none" and args.subtitle:
+        cmd += ["--subtitle-path", paths["subtitle"]]
+    if args.dub_manifest:
+        cmd += ["--dub-manifest", os.path.abspath(args.dub_manifest), "--analysis-id", manifest["analysis_id"]]
+    cmd += ["--ref-select-mode", args.ref_select_mode]
     cmd += ["--title", title]
     if args.duration:
         cmd += ["--duration", str(args.duration)]
@@ -183,7 +257,7 @@ def main() -> int:
     log(f"下载:  bmx video download --task-id {task_id} -o <name>_dubbed.mp4")
     print(json.dumps({"task_id": task_id,
                       "video_server_path": paths["video"],
-                      "subtitle_server_path": paths["subtitle"]},
+                      "subtitle_server_path": paths.get("subtitle")},
                      ensure_ascii=False, indent=2))
     return 0
 

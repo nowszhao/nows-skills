@@ -1,3 +1,5 @@
+> 音频优先协议 v1：读取源行 speaker/turn 注释。允许同人相邻源行合并为完整话语；禁止跨真实人物合成一句。不要为凑词数强切一句未结束的话。没有人物数据时先跑预分析，不凭文本猜声纹。保留全部源词的规则不变，ASR 纠错仍留给翻译步骤。
+
 # 全量字幕整理指令（Refine Prompt Template — FULL MODE）
 
 本文件是给**执行全量语义重断句的 Agent（任何内置模型的 Agent）** 的完整指令。
@@ -25,7 +27,7 @@
 # Output ONE line per final sentence: S<seq>\t<sentence text>
 #       (seq = 1,2,3... in video order, one output line per sentence)
 # Keep every word in order across the block (only punctuation may be added);
-#       5-16 words per sentence; NEVER output timestamps.
+#       Prefer complete utterances; 5-16 words is a soft guide; NEVER output timestamps.
 # === END GLOBAL CONTEXT ===
 # === PREVIOUS CHUNK (reference only — do NOT translate) ===
 # <前一批的末尾原文，用于衔接语境>
@@ -66,7 +68,7 @@ S3	<句子3 英文>
    流对齐"把每个句子映射回音频时间线。你只能**添加/调整标点**（原 ASR 无标点，
    给句子补上句号、逗号、问号），不能改写、合并、删除任何单词。真正的改词
    （ASR 纠错）留给翻译步骤。
-2. 每个句子 **5-16 词**。
+2. 每个句子优先语义完整；5–16 词只是建议。短答可更短，完整长句可更长。
 3. **断句/合并决策由语义驱动**：
    - 一个完整句子被机械断成两行 → **合并**成一句；
    - 一行里包含多个独立子句 → **拆分**成多句；
@@ -84,17 +86,13 @@ S3	<句子3 英文>
 1. 先读 GLOBAL CONTEXT，把握视频主题、说话人、语气。
 2. 读 PREVIOUS CHUNK，知道当前内容承接什么语境。
 3. 通读整块，在脑子里把每一句完整的话划出来（可能跨源行），再落笔输出。
-4. 输出前自查：每个句子 5-16 词？实词有没有被改/删？**语气词/重复词（uh/um/the the）
+4. 输出前自查：每句话语义是否完整？实词有没有被改/删？**语气词/重复词（uh/um/the the）
    有没有被"顺手清理"掉（这是最常见错误，必须 100% 保留）**？有没有漏词？断点/合并
    是否在语义自然处？句子顺序是否与源一致？
 
 ## 为什么不能改词（对你很重要）
 
-下游 `refine_srt.py apply` 用**词序贪心匹配**把每个句子映射回 YouTube ASR 的碎片
-时间线，继承真实语音时间戳。你一旦增删改实词——包括"清理"掉 uh/um 这类语气词——
-句子就和源对不上，贪心匹配从失配处把时间戳推到底，**其后所有行塌缩到同一时间戳**
-（实测：删 20+ 个 uh/um 曾让 406 行字幕全部挤在 1 秒内）。需要"改词"的事
-（ASR 纠错、TTS 净化）全部留给翻译步骤。
+下游严格校验源词顺序、人物归属和完整覆盖，再继承词级时间戳。增删改词会使校验失败，必须修复原模型输出后才能继续。ASR 纠错和 TTS 文本净化留给精翻与中文话语组装阶段。
 
 ## 示例
 
@@ -104,15 +102,15 @@ S3	<句子3 英文>
 14	0:01:04,600	0:01:10,000	ontology means and how we make it work in practice. So let's dive in.
 ```
 
-这两个源行其实包含**两句完整的话**，机械断句恰好把它们切开了，可接受的输出：
+这两个源行其实包含**三句完整的话**，机械断句恰好把它们切开了，可接受的输出：
 
 ```
-S7	Let me show you how. By the end of the session, I want you to leave with a clear understanding of what ontology means.
-S8	And how we make it work in practice.
+S7	Let me show you how.
+S8	By the end of the session, I want you to leave with a clear understanding of what ontology means and how we make it work in practice.
 S9	So let's dive in.
 ```
 
-注意：词序与原文完全一致，只补了标点；两句在中间断开、保持原顺序。
+注意：词序与原文完全一致，只补了标点；完整长句跨源行合并，全部词保持原顺序。
 
 ## 结果交付
 

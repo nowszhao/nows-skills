@@ -20,6 +20,8 @@ Exit codes:
     1  a hard requirement could not be satisfied
 """
 
+from __future__ import annotations
+
 import argparse
 import json
 import os
@@ -43,6 +45,10 @@ def run(cmd: list[str], **kwargs) -> subprocess.CompletedProcess:
 
 def probe_yt_dlp(venv_dir: str) -> str | None:
     """Return a usable yt-dlp path, installing into an isolated venv if needed."""
+    runtime_cli = os.path.join(os.path.dirname(sys.executable), "yt-dlp")
+    if os.path.isfile(runtime_cli) and os.access(runtime_cli, os.X_OK):
+        log(f"yt-dlp found in selected Python runtime: {runtime_cli}")
+        return runtime_cli
     found = which("yt-dlp")
     if found:
         log(f"yt-dlp found on PATH: {found}")

@@ -79,11 +79,23 @@ def main() -> int:
     parts_dir = os.path.join(args.workdir, "refine_parts")
     set_fail, seq_fail = [], []
     n_pairs = 0
-    for n in range(1, 1000):
-        src_path = os.path.join(parts_dir, f"refine_part_{n:02d}.txt")
-        ref_path = os.path.join(parts_dir, f"refined_{n:02d}.txt")
-        if not os.path.exists(src_path) or not os.path.exists(ref_path):
-            break
+    import json
+    plan_path = os.path.join(args.workdir, "refine_plan.json")
+    if os.path.isfile(plan_path):
+        with open(plan_path) as stream:
+            names = [part["file"] for part in json.load(stream)["parts"]]
+    else:
+        names = sorted(os.path.basename(p) for p in __import__("glob").glob(os.path.join(parts_dir, "refine_part_*.txt")))
+    if not names:
+        print("[check_refined] No refinement source blocks")
+        return 1
+    for name in names:
+        n = int(re.search(r"(\d+)\.txt$", name)[1])
+        src_path = os.path.join(parts_dir, name)
+        ref_path = os.path.join(parts_dir, name.replace("refine_part_", "refined_"))
+        if not os.path.isfile(src_path) or not os.path.isfile(ref_path):
+            print(f"[check_refined] Missing block {name}")
+            return 1
         n_pairs += 1
         sw = word_counter(parse_source_words(src_path))
         rw = word_counter(parse_refined_words(ref_path, args.mode))
@@ -108,6 +120,16 @@ def main() -> int:
               "(prompt must state: '禁止删任何词，包括 uh/um/重复词；词序与源完全一致'), "
               "then re-run this check. Do NOT fix by mechanical word insertion.")
         return 1
+    analysis_path = os.path.join(args.workdir, "analysis.json")
+    if os.path.isfile(analysis_path) and args.mode == "full":
+        from audio_first import attach_sources, load_analysis
+        texts = []
+        for name in names:
+            with open(os.path.join(parts_dir, name.replace("refine_part_", "refined_"))) as stream:
+                for line in stream:
+                    if line.startswith("S") and "\t" in line:
+                        texts.append(line.rstrip("\n").split("\t",1)[1])
+        attach_sources(texts, load_analysis(analysis_path))
     print("[check_refined] ALL PASS (word set 100% + sequence >= 0.995)")
     return 0
 
