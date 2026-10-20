@@ -41,6 +41,8 @@ python3 <skill>/scripts/bmx_video_task.py --video <MP4> --subtitle <精翻ASS> -
 
 5. 返回task_id并跟踪 status/result，完成后下载最终视频与服务端生成的ASS。中文音频使用自然语速，源ASS时长不是硬限制。
 
+服务器会保存声纹复核统计及未通过复核的词。低置信人物片段须随成片列出源时间，不能把“固定参考绑定正确”宣称为“人物模型全部识别正确”。Demucs 分离人声/背景音与 pyannote 区分说话人是两个步骤；前者不需要 Hugging Face token，后者在模型未完整缓存或需访问受限仓库时需要相应权限。
+
 ## 重要边界
 
 - FULL和精翻不可省略。同一人跨机械字幕行合并是预期行为；真实换人不得合成单个单声线请求。

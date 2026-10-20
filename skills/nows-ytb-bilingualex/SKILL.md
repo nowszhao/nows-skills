@@ -29,6 +29,8 @@ python3 <skill>/scripts/refine_srt.py prepare-full <工作目录>/transcript_off
 
 原始 YouTube ASR 保留供内容核对；配音流程使用后端带词级定位和全片人物身份的 canonical 源行。`>>` 只表示可能换人，不能当作 A/B 的声纹识别。人物未解析或参考不足要报告具体原因，不能借另一人的声线。
 
+检查 `speaker_verification_summary` 和词级 `speaker_verified`。未通过声纹复核的词沿用原生标签，不能把它们描述为人工确认或百分之百正确；交付时列出涉及的源时间和话语，尤其是短答、插话、片尾多人致谢。不得凭问题/回答的语义改写人物标签。这些词不进入克隆参考池。
+
 ## FULL 语义整理：必须保留
 
 阅读 `references/refine_prompt_full.md`。模型逐块写 `refine_parts/refined_NN.txt`，格式 `S<seq>	<完整英文话语>`，每块独立连续编号。

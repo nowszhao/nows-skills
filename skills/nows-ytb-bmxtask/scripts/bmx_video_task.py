@@ -2,7 +2,7 @@
 """
 bmx_video_task.py — 把「本地 MP4 + 双语 ASS」提交成 BiliMix(bmx) 视频配音任务。
 
-做四件事，全部幂等可重跑：
+做四件事；配音提交不幂等，重跑前应先检查已有 task_id：
   1. 校验 bmx 可用并已登录（bmx auth status）
   2. 上传 MP4 与 ASS（bmx audio upload），拿到服务端路径
   3. 用 bmx subtitle parse 校验字幕被识别为双语（count == bilingual_count）
@@ -190,7 +190,7 @@ def main() -> int:
             json.dump(state, stream, indent=2)
         log(f"人物分析已保存: {analysis_path}；继续 FULL 精翻，不提交配音")
         return 0
-    if manifest and manifest.get("source_media_sha256") != fingerprint:
+    if manifest and not args.dry_run and manifest.get("source_media_sha256") != fingerprint:
         log("精翻 manifest 与视频内容不匹配")
         return 1
 
