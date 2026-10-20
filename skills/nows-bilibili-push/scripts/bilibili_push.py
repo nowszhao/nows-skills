@@ -8,6 +8,10 @@ B站批量定时投稿（Playwright + 持久化登录 profile）
   python bilibili_push.py --tasks tasks.json --schedule "2026-10-11 20:00"
   python bilibili_push.py --tasks tasks.json --no-submit        # 只填表不提交（试跑）
   python bilibili_push.py --tasks tasks.json --only 0,2         # 只跑指定条目
+  python bilibili_push.py --tasks tasks.json --compliance off   # 关闭合规审查门禁（默认开启）
+
+合规门禁：默认要求每条视频旁有 <video>.compliance.json（由 trim_video.py 写出），
+且 result=pass/trimmed、其中 video 字段与 tasks.json 的 video 一致，否则启动浏览器前整体退出。
 
 tasks.json 格式（数组）:
 [
@@ -41,9 +45,46 @@ UA = ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
 # 创作声明：与"内容无需标注"一致（B站 copyright=3），转载/自制会要求额外信息
 DECLARATION = "内容无需标注"
 
+# 合规门禁允许的审查结论
+COMPLIANCE_OK = ("pass", "trimmed")
+
 
 def log(m):
     print(f"[{time.strftime('%H:%M:%S')}] {m}", flush=True)
+
+
+# ---------- 合规门禁 ----------
+
+def compliance_path(item):
+    if item.get("compliance_file"):
+        return os.path.abspath(item["compliance_file"])
+    return os.path.abspath(item["video"]) + ".compliance.json"
+
+
+def check_compliance(item):
+    """返回 (ok, msg)。ok=False 时必须在启动浏览器前阻断"""
+    if item.get("compliance") is False:
+        return True, "该条声明关闭审查（tasks.json compliance=false）"
+    p = compliance_path(item)
+    if not os.path.exists(p):
+        return False, (f"缺少审查门禁文件 {p} → 先跑 ass_to_transcript.py + 审查 + "
+                       f"trim_video.py；确需跳过用 --compliance off")
+    try:
+        with open(p, encoding="utf-8") as f:
+            c = json.load(f)
+    except Exception as e:
+        return False, f"门禁文件无法解析: {str(e)[:80]}"
+    if c.get("reviewed") is not True:
+        return False, "门禁文件 reviewed 不为 true"
+    res = c.get("result")
+    if res not in COMPLIANCE_OK:
+        return False, f"审查结果={res}（需 pass/trimmed），整条不建议发布"
+    got = os.path.abspath(c.get("video") or "")
+    want = os.path.abspath(item["video"])
+    if got != want:
+        return False, (f"门禁文件指向的视频 {os.path.basename(got) or '(空)'} "
+                       f"≠ 待上传 {os.path.basename(want)}，可能裁完忘了改 tasks.json")
+    return True, f"审查通过（{res}）"
 
 
 def find_chrome():
@@ -329,6 +370,8 @@ def main():
     ap.add_argument("--no-submit", action="store_true")
     ap.add_argument("--only", help="只跑指定条目索引，逗号分隔，如 0,2")
     ap.add_argument("--profile", default=DEFAULT_PROFILE)
+    ap.add_argument("--compliance", choices=["on", "off"], default="on",
+                    help="发布前合规审查门禁，默认 on；off 需用户明确同意")
     args = ap.parse_args()
 
     with open(args.tasks, encoding="utf-8") as f:
@@ -354,6 +397,25 @@ def main():
                  "date": target.strftime("%Y-%m-%d")}
     log(f"定时发布: {sched['date']} {sched['hour']}:{sched['minute']}")
 
+    # 合规审查门禁：启动浏览器前整体校验，避免一批里混着"未审查"的稿子
+    gate_fail = []
+    if args.compliance == "on":
+        log("合规审查门禁: 开启")
+        for it in items:
+            ok, msg = check_compliance(it)
+            tag = it.get("name") or os.path.basename(it.get("video", "?"))
+            log(f"  {'✅' if ok else '❌'} {tag}: {msg}")
+            if not ok:
+                gate_fail.append((tag, msg))
+    else:
+        log("⚠⚠ 合规审查门禁: 已关闭（--compliance off），本次投稿未经合规审查")
+    if gate_fail:
+        log("\n❌ 以下条目未通过合规门禁，已中止（未启动浏览器）:")
+        for n, m in gate_fail:
+            log(f"  - {n}: {m}")
+        log("   修复：补审查并跑 trim_video.py，或用户明确同意后加 --compliance off")
+        sys.exit(1)
+
     chrome = find_chrome()
     if not chrome:
         log("❌ 未找到 Chrome。先跑 agent-browser install，或安装 Google Chrome")
@@ -375,8 +437,9 @@ def main():
             time.sleep(3)
 
         print("\n===== 汇总 =====")
+        suffix = "" if args.compliance == "on" else " [未审查]"
         for n, ok, m in results:
-            print(f"  {'✅' if ok else '❌'} {n}: {m}")
+            print(f"  {'✅' if ok else '❌'} {n}: {m}{suffix}")
         ctx.close()
 
 
