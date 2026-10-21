@@ -70,7 +70,9 @@ def main():
         data={'rows':list(read_rows(work).values()),'instructions':
               'Create complete spoken Chinese units; same-speaker adjacent rows may merge. '
               'Preserve all content and dialogue order. Each source index exactly once. '
-              'Captions are display only. Output units with source_indices, text_zh, text_en.'}
+              'Captions are display-only bilingual pages, separate from whole TTS utterances. '
+              'Prefer short semantic captions; the renderer enforces line/height budgets. '
+              'Output units with source_indices, text_zh, text_en and optional captions.'}
         destination=work/'dub_unit_input.json'
     else:
         plan_path=Path(args.plan)

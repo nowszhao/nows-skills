@@ -1,194 +1,108 @@
 #!/usr/bin/env python3
+"""Download one MP4 and metadata. Browser/cookie use is optional and explicit.
+
+Run check_env.py first; supply --env-out if its JSON is outside the current
+working directory. This file does not translate or submit dubbing jobs.
 """
-download.py — Download a YouTube video (MP4 ONLY), reusing the browser login
-session via cookies. Subtitle acquisition is NO LONGER part of this script:
-the bilingual subtitle is built from YouTube's official ASR (timedtext) via
-`yt-dlp --write-auto-subs` + `aggregate_srt.py` (see SKILL.md).
-
-Steps performed:
-  1. Probe metadata via `yt-dlp -J` to read the title (for file naming).
-  2. Download the video at the requested quality (interactive choice from the
-     user, passed via --quality: best | 1080p | 720p | <height>).
-  3. Write manifest.json with everything later steps need.
-
-Auth: reuses the browser session with --cookies-from-browser. If that fails
-(e.g. Keychain permission or no login), retries without cookies for public
-videos. On YouTube's "Sign in to confirm you're not a bot" wall, automatically
-retries with `player_client=web_embedded` (bypasses the check; verified 2026-08).
-
-Usage:
-    python3 download.py --url <URL> [--quality best|1080p|720p|<height>] \
-        [--cookies-browser chrome] [--output <dir>] [--env-out yt_env.json]
-
-Exit codes: 0 ok, 1 fatal, 2 download issues that may be retryable.
-"""
-
+from __future__ import annotations
 import argparse
-import glob
+from datetime import datetime, timezone
 import json
 import os
+from pathlib import Path
 import re
 import subprocess
 import sys
-from datetime import datetime
 
 
-def log(msg: str) -> None:
-    print(f"[download] {msg}", flush=True)
+def log(message):
+    print('[download] '+message, file=sys.stderr, flush=True)
 
 
-def run(cmd: list[str], timeout: int = 1800) -> subprocess.CompletedProcess:
-    log("+ " + " ".join(str(c) for c in cmd))
-    return subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+def run(command, timeout=1800):
+    return subprocess.run(command, capture_output=True, text=True, encoding="utf-8", timeout=timeout,
+                          env={**os.environ,"PYTHONUTF8":"1"})
 
 
-def load_env(env_out: str) -> dict:
-    with open(env_out, "r", encoding="utf-8") as f:
-        return json.load(f)
+def sanitize(name):
+    name = re.sub(r'[\\/:*?"<>|\x00-\x1f]', '_', name)
+    name = re.sub(r'\s+', ' ', name).strip(' .')
+    name = name.encode('utf-8')[:160].decode('utf-8', errors='ignore').rstrip(' .') or 'video'
+    if name.split('.')[0].upper() in {'CON','PRN','AUX','NUL',*(f'COM{i}' for i in range(1,10)),*(f'LPT{i}' for i in range(1,10))}:
+        name = '_'+name
+    return name
 
 
-def sanitize(name: str) -> str:
-    """Filesystem-safe title (keep CJK and alnum, replace separators)."""
-    name = re.sub(r'[\\/:*?"<>|#%&\{\}\$!\'@+`=]', "_", name)
-    name = re.sub(r"\s+", " ", name).strip()
-    return name[:180] or "video"
+def quality_format(quality):
+    value = quality.lower().removesuffix('p')
+    if value == 'best':
+        return 'bv*+ba/b'
+    if not value.isdigit() or int(value) <= 0:
+        raise ValueError('Quality must be best or a positive height, e.g. 720p')
+    return f'bv*[height<={value}]+ba/b[height<={value}]'
 
 
-def fetch_info(yt: str, url: str, cookies_browser: str) -> tuple[dict | None, str | None]:
-    """Return (info_json, error). Tries cookies first, then plain."""
-    for extra, label in (
-        (["--cookies-from-browser", cookies_browser], f"cookies:{cookies_browser}"),
-        ([], "no-cookies"),
-    ):
-        cmd = [yt, "-J", "--no-playlist", *extra, "--no-warnings", url]
-        try:
-            r = run(cmd)
-        except subprocess.TimeoutExpired:
-            return None, f"metadata timeout with {label}"
-        if r.returncode == 0 and r.stdout.strip():
-            try:
-                return json.loads(r.stdout), None
-            except json.JSONDecodeError as e:
-                return None, f"bad JSON with {label}: {e}"
-        last_err = f"{label}: {r.stderr.strip()[-400:]}"
-    return None, last_err
+def fetch_info(yt, url, cookies_browser=None, cookies_file=None):
+    command = [yt] if isinstance(yt,str) else list(yt)
+    auth = ['--cookies-from-browser',cookies_browser] if cookies_browser else (['--cookies',cookies_file] if cookies_file else [])
+    result = run([*command,'--dump-single-json','--no-playlist','--no-warnings',*auth,url])
+    if result.returncode:
+        return None, result.stderr.strip()[-600:]
+    try:
+        return json.loads(result.stdout), None
+    except ValueError:
+        return None, 'yt-dlp returned invalid metadata JSON'
 
 
-def quality_format(quality: str) -> str:
-    """Map human quality choice to an f-format selector."""
-    q = quality.lower()
-    if q == "best":
-        return "bv*+ba/b"
-    if q == "1080p":
-        return "bv*[height<=1080]+ba/b[height<=1080]"
-    if q == "720p":
-        return "bv*[height<=720]+ba/b[height<=720]"
-    if q == "480p":
-        return "bv*[height<=480]+ba/b[height<=480]"
-    if q.isdigit():
-        return f"bv*[height<={q}]+ba/b[height<={q}]"
-    return "bv*+ba/b"
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--url', required=True)
+    parser.add_argument('--quality', default='720p')
+    cookies = parser.add_mutually_exclusive_group()
+    cookies.add_argument('--cookies-browser', help='yt-dlp browser[:profile] selector, optional')
+    cookies.add_argument('--cookies-file', help='Netscape-format cookie file, optional')
+    parser.add_argument('--output', default='.')
+    parser.add_argument('--env-out', default='yt_env.json')
+    args = parser.parse_args()
+    try:
+        env = json.loads(Path(args.env_out).read_text(encoding='utf-8'))
+        yt = env.get('yt_dlp_command') or ([env['yt_dlp']] if env.get('yt_dlp') else None)
+        ffmpeg = env.get('ffmpeg')
+        if not yt or not ffmpeg:
+            raise ValueError('Download tools missing; run check_env.py on this machine first')
+        if not isinstance(yt,list) or not all(isinstance(v,str) for v in yt):
+            raise ValueError('Invalid yt_dlp_command in environment JSON')
+        work = Path(args.output).expanduser().resolve(); work.mkdir(parents=True, exist_ok=True)
+        info, error = fetch_info(yt,args.url,args.cookies_browser,args.cookies_file)
+        if info is None:
+            raise ValueError(error)
+        title = info.get('title') or 'video'
+        base = sanitize(title)+'_'+sanitize(str(info.get('id') or 'video'))
+        auth = ['--cookies-from-browser',args.cookies_browser] if args.cookies_browser else (['--cookies',args.cookies_file] if args.cookies_file else [])
+        command = [*yt,'--no-playlist','--no-warnings','--no-progress',*auth,
+            '--ffmpeg-location',ffmpeg,'-f',quality_format(args.quality),
+            '--merge-output-format','mp4','--remux-video','mp4',
+            '--print','after_move:filepath','-o',str(work/(base+'.%(ext)s')),args.url]
+        result = run(command)
+        if result.returncode:
+            raise ValueError(result.stderr.strip()[-600:])
+        paths = [Path(line.strip()) for line in result.stdout.splitlines() if line.strip()]
+        video = paths[-1].resolve() if paths else work/(base+'.mp4')
+        if not video.is_file() or video.suffix.lower() != '.mp4' or video.parent != work:
+            raise ValueError('yt-dlp did not report the requested MP4; no unrelated files will be reused')
+        (work/'video_info.json').write_text(json.dumps(info,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
+        manifest = {'url':args.url,'title':title,'safe_title':base,
+            'duration_sec':info.get('duration') or 0,'video_path':str(video),
+            'metadata_path':'video_info.json','subtitle_path':None,'subtitle_kind':None,
+            'subtitle_lang':None,'quality':args.quality,
+            'downloaded_at':datetime.now(timezone.utc).isoformat()}
+        (work/'manifest.json').write_text(json.dumps(manifest,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
+        print(json.dumps(manifest,ensure_ascii=False)); return 0
+    except (OSError,ValueError,subprocess.SubprocessError) as error:
+        log(str(error)); return 1
 
 
-def main() -> int:
-    ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--url", required=True)
-    ap.add_argument("--quality", default="best",
-                    help="best | 1080p | 720p | 480p | <height>")
-    ap.add_argument("--cookies-browser", default="chrome",
-                    help="chrome | safari | edge | firefox")
-    ap.add_argument("--output", default=".", help="working directory")
-    ap.add_argument("--env-out", default="yt_env.json")
-    args = ap.parse_args()
-
-    os.makedirs(args.output, exist_ok=True)
-    env = load_env(args.env_out)
-    yt = env.get("yt_dlp")
-    if not yt:
-        log("yt-dlp not found. Run check_env.py first.")
-        return 1
-
-    # 1. metadata
-    info, err = fetch_info(yt, args.url, args.cookies_browser)
-    if not info:
-        log(f"Failed to fetch metadata: {err}")
-        return 1
-
-    title = info.get("title") or "video"
-    duration = info.get("duration") or 0
-    safe_title = sanitize(title)
-    log(f"Title: {title}")
-    log(f"Duration: {duration // 60}m {duration % 60:02d}s")
-
-    # 2. download video (MP4 only)
-    out_video = os.path.join(args.output, f"{safe_title}.%(ext)s")
-    f_sel = quality_format(args.quality)
-    log(f"Quality: {args.quality}  ->  format {f_sel}")
-    cmd = [
-        yt, "--no-playlist", "--no-warnings",
-        "--cookies-from-browser", args.cookies_browser,
-        "-f", f_sel, "--merge-output-format", "mp4",
-        "-o", out_video, args.url,
-    ]
-    r = run(cmd)
-    if r.returncode != 0:
-        log(f"Video download failed with cookies; retrying without cookies... "
-            f"({r.stderr.strip()[-300:]})")
-        cmd2 = [
-            yt, "--no-playlist", "--no-warnings",
-            "-f", f_sel, "--merge-output-format", "mp4",
-            "-o", out_video, args.url,
-        ]
-        r2 = run(cmd2)
-        if r2.returncode != 0:
-            # Final fallback: the default (web) client can hit YouTube's
-            # "Sign in to confirm you're not a bot" wall even with cookies.
-            # player_client=web_embedded uses the embedded player path, which
-            # bypasses that check (verified 2026-08 on multiple videos).
-            log(f"Video download failed: {r2.stderr.strip()[-500:]}")
-            log("Retrying with player_client=web_embedded (bypasses bot-check)...")
-            cmd3 = [
-                yt, "--no-playlist", "--no-warnings",
-                "--cookies-from-browser", args.cookies_browser,
-                "--extractor-args", "youtube:player_client=web_embedded",
-                "-f", f_sel, "--merge-output-format", "mp4",
-                "-o", out_video, args.url,
-            ]
-            r3 = run(cmd3)
-            if r3.returncode != 0:
-                log(f"Video download failed (web_embedded): {r3.stderr.strip()[-500:]}")
-                return 2
-            r = r3
-        else:
-            r = r2
-
-    mp4s = glob.glob(os.path.join(args.output, f"{safe_title}.mp4"))
-    if not mp4s:
-        mp4s = glob.glob(os.path.join(args.output, "*.mp4"))
-    video_path = mp4s[0] if mp4s else None
-    if not video_path:
-        log("No .mp4 produced — check ffmpeg/merge step.")
-        return 2
-    log(f"Video saved: {video_path} ({os.path.getsize(video_path) / 1e6:.1f} MB)")
-
-    # 3. manifest
-    manifest = {
-        "url": args.url,
-        "title": title,
-        "safe_title": safe_title,
-        "duration_sec": duration,
-        "video_path": video_path,
-        "subtitle_path": None,
-        "subtitle_kind": None,
-        "subtitle_lang": None,
-        "quality": args.quality,
-        "downloaded_at": datetime.now().isoformat(),
-    }
-    with open(os.path.join(args.output, "manifest.json"), "w", encoding="utf-8") as f:
-        json.dump(manifest, f, ensure_ascii=False, indent=2)
-    log(f"Manifest written: {os.path.join(args.output, 'manifest.json')}")
-    return 0
-
-
-if __name__ == "__main__":
+if __name__ == '__main__':
+    from portable_io import configure_utf8
+    configure_utf8()
     raise SystemExit(main())

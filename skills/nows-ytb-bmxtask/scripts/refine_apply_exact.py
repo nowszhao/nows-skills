@@ -16,7 +16,7 @@ import os
 import re
 import sys
 
-WORKDIR = os.path.dirname(os.path.abspath(__file__))
+WORKDIR = os.getcwd()
 WORD = re.compile(r"[a-zA-Z0-9']+")
 
 
@@ -118,4 +118,6 @@ def main():
 
 
 if __name__ == "__main__":
+    from portable_io import configure_utf8
+    configure_utf8()
     main()

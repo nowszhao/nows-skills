@@ -1,56 +1,57 @@
 ---
 name: nows-ytb-bmxtask
-description: Download a YouTube video, refine bilingual subtitles with nows-ytb-bilingualex, analyze source speakers and submit audio-first BiliMix dubbing with complete Chinese utterances and stable per-speaker reference voices.
-metadata:
-  agent_created: "true"
+description: Analyze speakers in a local or downloaded video and submit locally refined bilingual ASS and complete Chinese utterances to a configurable BiliMix dubbing server. Use with nows-ytb-bilingualex for stable per-speaker Chinese voice cloning.
 ---
 
-# YouTube 精翻 → 稳定人物声线 → BiliMix（音频优先 v1）
+# 精翻 → 稳定人物声线 → BiliMix
 
-保留 FULL 语义重组和精翻。完整中文话语自然播放优先，画面按配音时长反向变速；显示字幕分行不能成为 TTS 断点。
+翻译和完整中文话语由 Code Agent 的模型在本地完成；服务端负责人物分析、中文声音克隆、混音和视频变速。保留 FULL 和精翻，不回退到服务端重译。显示字幕分页不拆 TTS、不添加句内停顿。
 
-翻译与中文话语重组由本地精翻 skill 的模型执行；服务端只接收精翻产物进行分析、配音和音画合成，不调用服务端翻译覆盖这些产物。
+## 可移植环境
 
-## 工具
+需要能读写文件并执行命令的 Agent，以及 Python 3.10+。以下 `python` 代表本次选定的解释器；系统命令可能是 `python3` 或 Windows 的 `py -3`。所有命令使用同一 Python 环境。
 
-本机 Python >=3.10：`/Users/changhozhao/.workbuddy/binaries/python/envs/default/bin/python3`。
-`bmx`：`/Users/changhozhao/.workbuddy/binaries/python/envs/default/bin/bmx`。
-配套精翻 skill：同级 `nows-ytb-bilingualex`；使用当前目录，不引用 backup。
+- 安装 BiliMix 仓库的 SDK：`python -m pip install <BiliMix>/sdk`。
+- 服务地址来自用户配置：`--server <URL>` 或 `BILIMIX_SERVER`，不猜固定 IP。省略时采用 SDK 保存的地址/localhost 默认值。
+- 可用 `python -m bilimix_cli`；脚本优先选同一环境中的 CLI/模块，支持 `--bmx <可执行文件>` 或 `BILIMIX_CLI`。
+- 配套 `nows-ytb-bilingualex` 通常与本 skill 同级；若 Agent 分开安装，使用它的实际路径，不猜用户主目录。
+- 客户端不需要 Torch、WhisperX、TTS 或 Hugging Face token；这些在服务端配置。下载网址才需要本地 yt-dlp/FFmpeg，已有 MP4 可跳过下载。
 
-默认720p、BGM关闭、字幕字号40。只有用户指定时覆盖画质。标题搜索结果不明确时才确认视频，不额外询问默认画质。
+默认下载 720p、关闭 BGM、请求字号 40；用户可覆盖。实际字号会结合分辨率及字幕高度预算适配。
 
 ## 流程
 
-1. 用 sibling skill 的 check_env/download 下载 MP4。Chrome cookies 必须传递；读取 metadata/chapters/description，整理术语。检查确有台词，纯音乐/噪声不提交配音。
-2. 预分析（只上传视频，尚不提交配音）：
+1. 输入可为已有 MP4，或由配套 skill 下载的视频。读取标题/简介/章节整理术语；纯音乐、无台词视频不提交配音。每个视频使用独立工作目录。
+2. 检查 `python -m bilimix_cli --server <URL> auth status`。需要登录时按用户提供的账号执行 auth login，不在日志或工作文件保存密码。
+3. 上传并预分析：
 
-```bash
-python3 <skill>/scripts/bmx_video_task.py --video <MP4> --analyze-only
+```text
+python <本skill>/scripts/bmx_video_task.py --video <MP4> --workdir <工作目录> --server <URL> --analyze-only
 ```
 
-服务端须支持 `bmx api --field dubbing_protocol` 返回1，CLI支持 `bmx video analyze`。分析为异步排队任务；耗时较长时用后台执行并给出任务进展。输出视频目录 analysis.json/analysis_state.json；不要重复提交同一分析。
+服务需支持音频优先协议 1。分析任务 ID 在提交后立即写入 `analysis_state.json`；等待被中断时重跑本命令，继续同一分析。失败任务用 SDK 的 task status/retry 排查，不盲目再提交。
 
-3. 执行 sibling skill 的音频优先流程：import_analysis → FULL语义整理（词级人物边界）→ 精翻 → 中文完整话语组装 → dub_manifest.json。必须阅读 sibling SKILL.md 和翻译提示词。
-4. 预检精翻 ASS/manifest 后提交：
+4. 阅读配套 SKILL.md，执行 import_analysis → FULL 语义整理 → 精翻 → 完整中文话语重组，得到工作 ASS 和 `dub_manifest.json`。
+5. 一次任务引用同一视频、精翻 ASS 和 manifest：
 
-```bash
-python3 <skill>/scripts/bmx_video_task.py --video <MP4> --subtitle <精翻ASS> --dub-manifest <dub_manifest.json> --ref-select-mode speaker_global
+```text
+python <本skill>/scripts/bmx_video_task.py --video <MP4> --workdir <工作目录> --server <URL> --subtitle <工作ASS> --dub-manifest <dub_manifest.json>
 ```
 
-提交复用 analysis_state.json 的视频服务端路径。manifest 的媒体哈希与本地 MP4必须相同；人物身份来自分析，A 的所有话语使用 A 的合格参考，B同理，短答也不借别人的声线。只改 ASS Name 不等于声纹验证。
+人物身份来自原声分析，同一人物全片固定使用合格参考。短答也不借另一人的声线。只改 ASS Name 不等于人物识别正确。
 
-5. 返回task_id并跟踪 status/result，完成后下载最终视频与服务端生成的ASS。中文音频使用自然语速，源ASS时长不是硬限制。
+6. 跟踪任务，下载最终视频、主音频及服务端最终 ASS。以 `video_result.subtitle_layout` 检查分页数量、最大行数和高度预算。字幕时间按配音后的音频轴生成。
 
-服务器会保存声纹复核统计及未通过复核的词。低置信人物片段须随成片列出源时间，不能把“固定参考绑定正确”宣称为“人物模型全部识别正确”。Demucs 分离人声/背景音与 pyannote 区分说话人是两个步骤；前者不需要 Hugging Face token，后者在模型未完整缓存或需访问受限仓库时需要相应权限。
+## 状态和交付
 
-## 重要边界
+脚本 stdout 是 JSON，诊断在 stderr。状态文件绑定服务器和媒体哈希，不能把另一服务器的上传路径拿来复用。
 
-- FULL和精翻不可省略。同一人跨机械字幕行合并是预期行为；真实换人不得合成单个单声线请求。
-- 参考不足/人物不明/配音缺失是明确失败，不能默默换人或漏句。
-- `segment`只用于排错对照，正常配音用已验证人物参考池和speaker_global。
-- `--no-submit`仍会上传和校验；`--dry-run`不执行网络动作。
-- 服务端配音任务不去重。重跑前查看task list，已有任务用retry或wait；不能无边界反复提交。
-- 修改参考后重试必须重新校验内容哈希，不依赖旧索引或同路径缓存。
-- 工作ASS用于精翻来源，最终ASS必须对应配音后的时间轴。不要把工作时间戳重锚到最终交付文件。
+- `--dry-run`：无网络、无写文件；`--no-submit`：上传并校验，不创建配音任务。
+- `dubbing_state.json` 记录已提交任务；相同请求重跑会返回已有 task_id。要创建另一条任务时才用 `--new-task`。
+- `submission_pending.json` 表示提交响应未确认。先查服务器 task list，避免网络中断后重复付出合成成本；不是服务端原子幂等保证。
+- `--fresh-upload` 丢弃本地上传/分析绑定。文件已被服务端清理时按实际状态决定是否重传、重新分析。
+- 参考不足、人物不明、TTS 缺失或外部精翻文件无效必须明确失败，不能换声音、漏句或自动重译。
 
-命令与排错细节见 references/bmx_reference.md。旧 pipeline_notes 仅供历史故障参考，不能覆盖音频优先 v1流程。
+检查 `speaker_verification_summary` 和 `speaker_verified`，随成片列出低置信人物的源时间与话语。固定参考绑定正确不代表人物模型全部识别正确。Demucs 分离人声/背景，pyannote 区分人物；不要混淆。
+
+精简命令参考见 [references/bmx_reference.md](references/bmx_reference.md)。

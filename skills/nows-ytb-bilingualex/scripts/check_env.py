@@ -1,153 +1,104 @@
 #!/usr/bin/env python3
+"""Discover download tools without assuming an Agent, OS, or Python location.
+
+By default only check. --install-missing may install yt-dlp/imageio-ffmpeg in
+an isolated --venv (default: .bilimix-tools beside --env-out).
 """
-check_env.py — Ensure yt-dlp and ffmpeg are available for the pipeline.
-
-Runs three probes:
-  1. yt-dlp   — on PATH, or install into an isolated venv via pip
-  2. ffmpeg   — on PATH (brew/apt), or install the `imageio-ffmpeg` wheel
-               and reuse its bundled static binary
-  3. Python   — record the interpreter used for later steps
-
-Writes a machine-readable env file (JSON) that every other script in this
-skill reads to locate binaries. By default writes to the *current working
-directory* as `yt_env.json`, but any path can be given with --env-out.
-
-Usage:
-    python3 check_env.py [--env-out <path>] [--venv <path>]
-
-Exit codes:
-    0  everything ready
-    1  a hard requirement could not be satisfied
-"""
-
 from __future__ import annotations
-
 import argparse
+import importlib.util
 import json
 import os
+from pathlib import Path
 import shutil
 import subprocess
 import sys
-import tempfile
 
 
-def log(msg: str) -> None:
-    print(f"[check_env] {msg}", flush=True)
+def log(message):
+    print('[check_env] '+message, file=sys.stderr, flush=True)
 
 
-def which(cmd: str) -> str | None:
-    return shutil.which(cmd)
+def venv_executable(directory, name, windows=None):
+    windows = os.name == 'nt' if windows is None else windows
+    return str(Path(directory)/('Scripts' if windows else 'bin')/(name+('.exe' if windows else '')))
 
 
-def run(cmd: list[str], **kwargs) -> subprocess.CompletedProcess:
-    return subprocess.run(cmd, capture_output=True, text=True, **kwargs)
+def runtime_executable(name):
+    suffix = '.exe' if os.name == 'nt' else ''
+    candidate = Path(sys.executable).parent/(name+suffix)
+    return str(candidate) if candidate.is_file() and os.access(candidate, os.X_OK) else None
 
 
-def probe_yt_dlp(venv_dir: str) -> str | None:
-    """Return a usable yt-dlp path, installing into an isolated venv if needed."""
-    runtime_cli = os.path.join(os.path.dirname(sys.executable), "yt-dlp")
-    if os.path.isfile(runtime_cli) and os.access(runtime_cli, os.X_OK):
-        log(f"yt-dlp found in selected Python runtime: {runtime_cli}")
-        return runtime_cli
-    found = which("yt-dlp")
+def install_package(directory, package):
+    python = venv_executable(directory, 'python')
+    if not Path(python).is_file():
+        subprocess.run([sys.executable, '-m', 'venv', str(directory)], check=True)
+    subprocess.run([python, '-m', 'pip', 'install', package], check=True)
+    return python
+
+
+def probe_yt_dlp(venv_dir, install=False):
+    explicit = os.environ.get('BILIMIX_YTDLP')
+    if explicit:
+        return shutil.which(explicit) or (explicit if Path(explicit).is_file() else None)
+    found = runtime_executable('yt-dlp')
     if found:
-        log(f"yt-dlp found on PATH: {found}")
         return found
-
-    log("yt-dlp not on PATH — installing into isolated venv...")
-    os.makedirs(venv_dir, exist_ok=True)
-    venv_py = os.path.join(venv_dir, "bin", "python")
-    if not os.path.exists(venv_py):
-        r = run([sys.executable, "-m", "venv", venv_dir])
-        if r.returncode != 0:
-            log(f"venv creation failed: {r.stderr.strip()}")
-            return None
-    r = run([venv_py, "-m", "pip", "install", "--quiet", "--upgrade", "pip"])
-    if r.returncode != 0:
-        log(f"pip upgrade failed: {r.stderr.strip()}")
-    r = run([venv_py, "-m", "pip", "install", "--quiet", "yt-dlp"])
-    if r.returncode != 0:
-        log(f"yt-dlp install failed: {r.stderr.strip()}")
-        return None
-    candidate = which("yt-dlp") or os.path.join(venv_dir, "bin", "yt-dlp")
-    log(f"yt-dlp installed at: {candidate}")
-    return candidate
+    if importlib.util.find_spec('yt_dlp'):
+        return [sys.executable, '-m', 'yt_dlp']
+    found = shutil.which('yt-dlp')
+    if found or not install:
+        return found
+    python = install_package(venv_dir, 'yt-dlp')
+    return [python, '-m', 'yt_dlp']
 
 
-def probe_ffmpeg(venv_dir: str) -> str | None:
-    """Return a usable ffmpeg path; fall back to imageio-ffmpeg's static binary."""
-    found = which("ffmpeg")
+def probe_ffmpeg(venv_dir, install=False):
+    explicit = os.environ.get('BILIMIX_FFMPEG')
+    if explicit:
+        return shutil.which(explicit) or (explicit if Path(explicit).is_file() else None)
+    found = runtime_executable('ffmpeg') or shutil.which('ffmpeg')
     if found:
-        log(f"ffmpeg found on PATH: {found}")
         return found
-
-    log("ffmpeg not on PATH — trying imageio-ffmpeg wheel...")
-    venv_py = os.path.join(venv_dir, "bin", "python")
-    if not os.path.exists(venv_py):
-        r = run([sys.executable, "-m", "venv", venv_dir])
-        if r.returncode != 0:
-            log(f"venv creation failed: {r.stderr.strip()}")
+    python = sys.executable
+    if not importlib.util.find_spec('imageio_ffmpeg'):
+        if not install:
             return None
-    r = run([venv_py, "-m", "pip", "install", "--quiet", "imageio-ffmpeg"])
-    if r.returncode != 0:
-        log(f"imageio-ffmpeg install failed: {r.stderr.strip()}")
-        return None
+        python = install_package(venv_dir, 'imageio-ffmpeg')
+    result = subprocess.run([python, '-c', 'import imageio_ffmpeg; print(imageio_ffmpeg.get_ffmpeg_exe())'],
+                            capture_output=True, text=True, timeout=30)
+    value = result.stdout.strip()
+    return value if result.returncode == 0 and Path(value).is_file() else None
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--env-out', default='yt_env.json')
+    parser.add_argument('--venv', help='Isolated tools environment; never an Agent runtime')
+    parser.add_argument('--install-missing', action='store_true')
+    args = parser.parse_args()
+    destination = Path(args.env_out).expanduser().resolve()
+    directory = Path(args.venv).expanduser() if args.venv else destination.parent/'.bilimix-tools'
     try:
-        code = (
-            "import imageio_ffmpeg as i; print(i.get_ffmpeg_exe())"
-        )
-        r = run([venv_py, "-c", code])
-        exe = r.stdout.strip()
-        if r.returncode == 0 and exe and os.path.exists(exe):
-            log(f"ffmpeg via imageio-ffmpeg: {exe}")
-            return exe
-    except Exception as e:  # pragma: no cover
-        log(f"imageio-ffmpeg probe failed: {e}")
-    return None
-
-
-def main() -> int:
-    ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--env-out", default="yt_env.json", help="where to write env JSON")
-    ap.add_argument(
-        "--venv",
-        default=os.path.join(
-            os.path.expanduser("~"),
-            ".workbuddy",
-            "binaries",
-            "python",
-            "envs",
-            "ytdlp-env",
-        ),
-        help="isolated venv dir for yt-dlp / ffmpeg fallback installs",
-    )
-    args = ap.parse_args()
-
-    env = {
-        "yt_dlp": None,
-        "ffmpeg": None,
-        "python": sys.executable,
-        "checked_at": __import__("datetime").datetime.now().isoformat(),
-    }
-
-    env["yt_dlp"] = probe_yt_dlp(args.venv)
-    env["ffmpeg"] = probe_ffmpeg(args.venv)
-
-    with open(args.env_out, "w", encoding="utf-8") as f:
-        json.dump(env, f, ensure_ascii=False, indent=2)
-    log(f"env file written: {args.env_out}")
-
-    missing = [k for k in ("yt_dlp", "ffmpeg") if not env[k]]
+        yt = probe_yt_dlp(directory, args.install_missing)
+        ffmpeg = probe_ffmpeg(directory, args.install_missing)
+    except (OSError, subprocess.SubprocessError) as error:
+        log(str(error)); return 1
+    env = {'schema_version':1, 'python':sys.executable, 'machine_local':True,
+           'yt_dlp':yt if isinstance(yt,str) else None,
+           'yt_dlp_command':([yt] if isinstance(yt,str) else yt), 'ffmpeg':ffmpeg}
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    destination.write_text(json.dumps(env, ensure_ascii=False, indent=2)+'\n', encoding='utf-8')
+    print(json.dumps(env, ensure_ascii=False))
+    missing = [name for name,value in [('yt-dlp',yt),('ffmpeg',ffmpeg)] if not value]
     if missing:
-        log(f"MISSING: {', '.join(missing)}")
-        log(
-            "Hints: install ffmpeg via `brew install ffmpeg` (macOS) or "
-            "`apt install ffmpeg` (Debian/Ubuntu). yt-dlp usually resolves via pip."
-        )
+        log('Missing '+', '.join(missing)+'. Install them or rerun with --install-missing.')
         return 1
-    log("All requirements satisfied.")
     return 0
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
+    from portable_io import configure_utf8
+    configure_utf8()
     raise SystemExit(main())

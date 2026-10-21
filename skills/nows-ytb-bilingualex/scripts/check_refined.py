@@ -135,4 +135,6 @@ def main() -> int:
 
 
 if __name__ == "__main__":
+    from portable_io import configure_utf8
+    configure_utf8()
     sys.exit(main())

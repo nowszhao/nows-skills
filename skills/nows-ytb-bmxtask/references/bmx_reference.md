@@ -1,118 +1,47 @@
-# 音频优先协议 v1（当前）
+# 通用 BiliMix 客户端命令
 
-- `bmx api --field dubbing_protocol` 必须返回 `1`。
-- `bmx video analyze --server-path <上传MP4路径> --wait`：异步源人物/词级定位，result.analysis 包含 words/turns/references/source_media_sha256/analysis_id。
-- `bmx task submit --type video --server-path <MP4路径> --subtitle-path <工作ASS路径> --dub-manifest <本地JSON> --analysis-id <分析task_id> --ref-select-mode speaker_global`：精翻配音。
-- CLI读取本地manifest为结构化请求，不通过音频上传接口传JSON。
-- 初次合成/恢复/重试均验证参考内容和模型指纹。最终字幕在配音输出时间轴上生成。
+`python -m pip install <仓库>/sdk` 安装 CLI 和 Python SDK。`bmx` 与 `python -m bilimix_cli` 等价；后者不依赖 shell PATH。下面可把 `bmx` 替换为该模块调用。
 
-以下为兼容命令与历史记录；外部ASS跳过的是转译，不再跳过人物分析。
+服务地址优先级：`--server` > `BILIMIX_SERVER` > SDK 本地配置 > `http://localhost:5000`。配置目录可用 `BILIMIX_HOME` 指定，默认用户自己的 `.bilimix`。会话按服务器隔离；升级到 1.1 后旧的无归属 session 不会自动发送给服务器，需要按服务器登录一次。
 
-# bmx 命令参考（BiliMix CLI）
-
-本机路径：`/Users/changhozhao/.workbuddy/binaries/python/envs/default/bin/bmx`
-（`command -v bmx` 可确认；也支持 `$BILIMIX_SERVER` 指定服务地址。）
-
-通用选项：`--pretty`（美化 JSON）、`-q`（抑制提示，脚本里建议加）、
-`--field <嵌套字段>`（**直接提取字段值**，脚本里比解析 JSON 稳，例如
-`bmx -q audio upload x.ass --field local_path` 只输出路径字符串）。
-
-## 脚本化调用的两个坑
-
-1. **`--field` 只输出裸值**（如 `239`），不是 JSON。用 Python 封装时，返回值是
-   `(json_obj, field_value)` 二元组——**用 `--field` 时要取第二个元素**。
-   曾经在这里取错成第一个（恒为 `None`），导致校验恒定失败、误以为服务端有问题。
-2. **上传后立刻 parse 可能瞬时失败**（返回空）。`bmx_video_task.py` 内置 3 次重试。
-   脚本里建议统一加 `-q`，避免提示信息混进 stdout 干扰解析。
-
-## 认证
-
-```bash
-bmx auth status    # {"auth_enabled": false, "authenticated": true} 即可用
-bmx auth login     # 未登录时先跑这个
+```text
+bmx --server <URL> api --field dubbing_protocol
+bmx --server <URL> auth status
+bmx --server <URL> auth login --username <用户名> --password <密码>
 ```
 
-服务端可能不开启鉴权（`auth_enabled: false`），此时 `authenticated` 恒为 true。
+不要在共享说明、命令历史示例或日志中放真实凭据。auth status 的 `server` 表示 CLI 实际连接地址，供工作流绑定状态使用。
 
-## 上传（视频和字幕用同一个命令）
+## 上传、预分析和提交
 
-```bash
-bmx audio upload "<file>" --field local_path
+```text
+bmx --server <URL> audio upload <MP4或ASS> --field local_path
+bmx --server <URL> video analyze --server-path <上传返回路径>
+bmx --server <URL> task wait <分析ID>
+bmx --server <URL> task result <分析ID>
 ```
 
-- 接受 `.mp4` 和 `.ass`/`.srt`，*没有* 单独的 video upload 子命令。
-- 返回：
-  ```json
-  {"filename": "...", "local_path": "/root/BiliMix/data/downloads/<name>", "ok": true, "size_mb": 125.4}
-  ```
-- 实测：125 MB 的 MP4 上传约 30 秒；0.1 MB 的 ASS 秒传；49 MB 约 15 秒。
-- **文件名已存在时服务端会自动追加 `_<timestamp>` 后缀**（如 `...Arize AI_1790864179.ass`）。
-  后续 `subtitle parse` / `task submit` 一律用 upload 返回的 `local_path`，**不要自己拼路径**。
+始终使用上传返回的 `local_path`，不要拼接服务端磁盘路径。人物分析位于 `result.analysis`。完整本地工作流优先使用 bmx_video_task.py，能在等待前保存分析 ID。
 
-## 字幕校验（提交前必做）
-
-```bash
-bmx subtitle parse "<服务端 ass 路径>" --pretty
-bmx subtitle parse "<服务端 ass 路径>" --field bilingual_count
+```text
+bmx --server <URL> subtitle parse <工作ASS的服务端路径>
+bmx --server <URL> task submit --type video --server-path <MP4路径> --subtitle-path <工作ASS路径> --dub-manifest <本地manifest.json> --analysis-id <分析ID> --ref-select-mode speaker_global --subtitle-mode bilingual --subtitle-font-size 40
 ```
 
-返回 `count`（总行数）与 `bilingual_count`（识别为 `EN || ZH` 的行数）。
-**两者必须相等且非 0**，否则服务端会退化成「重新转录 + 重新翻译」，白做一遍。
-不相等时检查每行是否都用 ` || `（空格-竖线-竖线-空格）分隔。
+工作 ASS 每行用 `EN || ZH` 保留导入契约。`count == bilingual_count > 0` 才通过。无效文件明确失败，不回退服务端翻译；字幕不代替原声人物分析。
 
-## 提交视频任务
+显示分页与 TTS 单位分开。默认中文最多 2 行、英文最多 2 行、合计最多 4 行，估算文字高度不超过画面 25%；字号过大时适配高度。主音频不会因分页被切成小段。
 
-```bash
-bmx task submit \
-  --type video \
-  --server-path "<mp4 服务端路径>" \
-  --subtitle-path "<ass 服务端路径>" \
-  --subtitle-mode bilingual \
-  --title "<标题>" \
-  --duration 1894
+## 状态和下载
+
+```text
+bmx --server <URL> task status <task_id>
+bmx --server <URL> task wait <task_id>
+bmx --server <URL> task result <task_id>
+bmx --server <URL> video download --task-id <task_id> -o dubbed.mp4
+bmx --server <URL> video download-srt --task-id <task_id> -o dubbed.ass
 ```
 
-关键参数语义：
+`task result` 的 segments 是预览，完整 units/翻译/时间映射及计数用于核对。工作 ASS 保留源时间，下载的最终 ASS 对应配音时间，不能互换。
 
-| 参数 | 说明 |
-| --- | --- |
-| `--type video` | 必须显式指定，默认是 `audio` |
-| `--server-path` | 服务端**绝对路径**（upload 返回的 `local_path`） |
-| `--video-url` | 直接给 YouTube URL，让服务端自己下（本机已能下载时不必用） |
-| `--subtitle-path` | 外部双语 ASS；**提供后服务端跳过转录和翻译，直接拿字幕配音** |
-| `--subtitle-mode` | `bilingual` / `chinese_only` / `none`，默认 `bilingual` |
-| `--subtitle-font-size` | 服务端默认 **20**；**本项目要求 40**，必须显式传（2026-10-09 用户指定） |
-| `--duration` | 预知时长，`1894` 或 `01:23:45`，可选但建议给 |
-| `--keep-bgm` | **保留原视频背景音乐。不加 = 关闭 BGM（默认行为）** |
-| `--skip-confirm` | 跳过人工确认，是默认行为；`--no-skip-confirm` 才要人工确认 |
-| `--wait` | 提交后阻塞等待完成（长视频不推荐，用 `task wait` 分开跑） |
-
-**背景音乐**：语义是「默认去除」。用户说「背景音乐默认关闭」时，什么都不用加。
-
-返回：`{"message": "任务已提交", "task_id": "<32位hex>"}`。
-
-**没有任务去重**：同一对文件提交两次 = 两个任务。重跑前先 `bmx task list --limit 10` 看一眼。
-建议流程：先 `bmx_video_task.py --no-submit` 预检，通过后再正式提交。
-
-## 跟踪与下载
-
-```bash
-bmx task status <task_id>              # {"status":"queued","step":"download","progress":0,...}
-bmx task wait <task_id>                # 阻塞轮询直到完成
-bmx task result <task_id>              # 完整结果 JSON
-bmx task list --limit 10               # 最近任务
-bmx video download --task-id <task_id> -o out_dubbed.mp4
-bmx video download --path <basename/basename_dubbed.mp4> -o out.mp4
-bmx task cancel <task_id>              # 终止
-bmx task delete <task_id>              # 删除任务及其文件
-```
-
-`status` 取值观察：`queued`（step=download）→ 后续 TTS 合成阶段。31 分钟视频的
-TTS 合成通常需要较长时间，**提交后不要把用户挂在这里等**，先回报 task_id。
-
-## 其他可用子命令（本流程未用，备忘）
-
-`audio download` / `audio url`、`translate`、`podcast`、`favorites`、`subscriptions`、
-`episodes`、`history`、`recent`、`config`、`api`（API 元信息）、
-`file download`（下载目录里的文件）、`task confirm-sentences` / `retry` /
-`retry-synthesis` / `reorder` / `redo`（断点续传与重做）。
+服务端任务提交不去重。包装脚本用本地回执复用相同请求；若提交后响应丢失，先查 task list，再决定是否新建。只对读取类操作作有限重试，不盲目重放提交。

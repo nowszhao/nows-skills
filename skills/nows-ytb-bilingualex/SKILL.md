@@ -11,20 +11,28 @@ metadata:
 
 翻译与中文话语重组由本地本 skill 的模型执行；BiliMix 服务端负责原声分析、声线绑定、配音与音画合成。提交 manifest 后不再调用服务端翻译覆盖精翻。
 
-## 环境
+## 可移植环境
 
-- Python >=3.10；本机可用 `/Users/changhozhao/.workbuddy/binaries/python/envs/default/bin/python3`。
-- 默认 720p；下载使用 `--cookies-browser chrome`。先运行 `scripts/check_env.py`，下载由 `scripts/download.py` 负责。
-- ASR、视频简介和章节可用于术语纠错；不用 YouTube 机器翻译。
-- 本地脚本以本 skill 所在目录为准，不使用已消失的 backup 目录。
+需要能读写文件并执行命令的 Code Agent，以及 Python 3.10+。以下 `python` 代表选定解释器；macOS/Linux 可能使用 `python`，Windows 可用 `py -3`。本 skill 不调用特定 Agent API，语义整理与翻译由当前 Agent 的模型写文件完成。
+
+默认下载 720p。公开视频先不带 cookies；仅在需要且用户允许时指定 `--cookies-browser <浏览器[:配置]>` 或 `--cookies-file <文件>`，不假设已安装 Chrome。
+
+```text
+python <本skill>/scripts/check_env.py --env-out <工作目录>/yt_env.json
+python <本skill>/scripts/download.py --url <URL> --quality 720p --output <工作目录> --env-out <工作目录>/yt_env.json
+```
+
+缺依赖时可选择 `check_env.py --install-missing`，安装到独立工具 venv；不修改 Agent 自带环境。`yt_env.json` 是本机工具发现结果，换电脑后重新生成，不随 skill 分发。已有本地 MP4 可直接进入人物分析，不需要浏览器或下载器。
+
+视频 metadata 保存为 video_info.json，结合简介、章节和原始 ASR 作术语纠错；不用 YouTube 机器翻译。脚本路径以本次安装目录为准，工作产物放独立工作目录。
 
 ## 用于 BiliMix 多人物配音：先拿人物分析
 
-调用同级 `nows-ytb-bmxtask/scripts/bmx_video_task.py --video <MP4> --analyze-only`。它上传一次并等待异步人物分析，写入视频目录 `analysis.json` 和 `analysis_state.json`；后续提交会复用上传路径。
+按实际安装路径调用配套 `nows-ytb-bmxtask/scripts/bmx_video_task.py --video <MP4> --workdir <工作目录> --server <URL> --analyze-only`。两份 skill 不相邻时使用各自实际路径，不猜用户目录。它上传一次并等待异步人物分析，写入视频目录 `analysis.json` 和 `analysis_state.json`；后续提交会复用上传路径。
 
 ```bash
-python3 <skill>/scripts/import_analysis.py <工作目录>/analysis.json --workdir <工作目录>
-python3 <skill>/scripts/refine_srt.py prepare-full <工作目录>/transcript_official.srt <工作目录>/raw_aligned.srt --workdir <工作目录>
+python <skill>/scripts/import_analysis.py <工作目录>/analysis.json --workdir <工作目录>
+python <skill>/scripts/refine_srt.py prepare-full <工作目录>/transcript_official.srt <工作目录>/raw_aligned.srt --workdir <工作目录>
 ```
 
 原始 YouTube ASR 保留供内容核对；配音流程使用后端带词级定位和全片人物身份的 canonical 源行。`>>` 只表示可能换人，不能当作 A/B 的声纹识别。人物未解析或参考不足要报告具体原因，不能借另一人的声线。
@@ -41,8 +49,8 @@ python3 <skill>/scripts/refine_srt.py prepare-full <工作目录>/transcript_off
 - 不输出时间戳；脚本使用真实词级定位，保存人物与来源所有权。
 
 ```bash
-python3 <skill>/scripts/check_refined.py --workdir <工作目录> --mode full
-python3 <skill>/scripts/refine_srt.py apply --workdir <工作目录>
+python <skill>/scripts/check_refined.py --workdir <工作目录> --mode full
+python <skill>/scripts/refine_srt.py apply --workdir <工作目录>
 ```
 
 缺块、词序漂移、跨人合句均不可继续。修复对应模型输出后重检，不机械补词掩盖漂移。
@@ -50,14 +58,14 @@ python3 <skill>/scripts/refine_srt.py apply --workdir <工作目录>
 ## 精翻
 
 ```bash
-python3 <skill>/scripts/split_translation.py <工作目录>/transcript_refined.srt --lines-per-part 70 --out <工作目录>
+python <skill>/scripts/split_translation.py <工作目录>/transcript_refined.srt --lines-per-part 70 --out <工作目录>
 ```
 
 阅读 `references/translation_prompt.md`，按块写 `parts/trans_NN.txt`：`idx	start	end	修正英文	中文`。保留 idx/工作时间戳/行数，先逐行建立可靠来源；翻译自然口语，术语统一，删除舞台指示和章节泄漏。不为了原时间窗删内容或强行压语速。
 
 ```bash
-python3 <skill>/scripts/verify_translation.py --workdir <工作目录>
-python3 <skill>/scripts/assemble_final.py --workdir <工作目录>
+python <skill>/scripts/verify_translation.py --workdir <工作目录>
+python <skill>/scripts/assemble_final.py --workdir <工作目录>
 ```
 
 ASS Name 继承人物。这个 ASS 是精翻工作产物；最终交付 ASS 由 BiliMix 按实际配音时间重建。`reanchor_timestamps.py` 只能修工作翻译的源时间，不能改最终交付时间轴。
@@ -65,7 +73,7 @@ ASS Name 继承人物。这个 ASS 是精翻工作产物；最终交付 ASS 由 
 ## 中文完整话语组装：配音前必做
 
 ```bash
-python3 <skill>/scripts/build_dub_manifest.py prepare --workdir <工作目录>
+python <skill>/scripts/build_dub_manifest.py prepare --workdir <工作目录>
 ```
 
 通读生成的 `dub_unit_input.json`，模型写 `dub_units_plan.json`：
@@ -77,19 +85,28 @@ python3 <skill>/scripts/build_dub_manifest.py prepare --workdir <工作目录>
 - source_indices 按原序完整覆盖全部输入各一次，只合并同人相邻行；不得把 A→B→A 重排。
 - 中文可按语义自然重写，不能只把残句用空格拼接；不漏语义、不增加原文没有的信息。
 - 一条 unit 是一次 TTS。显示需要多条 captions 时，中文连接必须恰好等于 text_zh；只影响显示，不产生新声音或额外停顿。
+- captions 仅控制显示。优先按自然从句写较短的中英文页；可先以中文约 15–28 字、英文约 8–20 词作为草稿参考，最终由实际分辨率/字号校验。服务端自动分页兜底：每种语言最多 2 行、总共最多 4 行，文字高度预算 25%；不为字幕分页改动完整 TTS。
 - boundary_after 可用 continuation/sentence_end/turn_end；以真实话语关系判断。
 - 超出引擎长度时在自然从句边界拆分，不能无限长整段合成。
 
 ```bash
-python3 <skill>/scripts/build_dub_manifest.py apply --workdir <工作目录>
+python <skill>/scripts/build_dub_manifest.py apply --workdir <工作目录>
 ```
 
 输出 `dub_manifest.json`，包含源媒体哈希、analysis ID、每句人物和源词 ID。由提交脚本送给 BiliMix，不手填或伪造人物/参考质量。
 
 ## 只生成字幕
 
-不做配音时仍可从 YouTube 官方 ASR 经 `aggregate_srt.py` → FULL → 精翻 → assemble。缺少音频人物分析的路径只交字幕，不宣称多人物声线已验证。滚动 ASR 的时间单调/格式校验仍需执行。
+不做配音时仍可从 YouTube 官方 ASR 经 `aggregate_srt.py` → FULL → 精翻 → assemble。工作 ASS 是 `EN || ZH` 导入/审校格式；另生成供观看的分页 ASS：
+
+```text
+python <本skill>/scripts/render_subtitles.py --input <工作ASS> --output <观看用ASS> --width <视频宽> --height <视频高> --font-size 40
+```
+
+使用真实分辨率；保留工作 ASS 不覆盖。渲染器不需要 BiliMix 或模型依赖；若源时间重叠会明确报错，先整理 FULL/时间轴，不能让多条字幕堆叠遮屏。缺少音频人物分析的路径只交字幕，不宣称多人物声线已验证。滚动 ASR 的时间单调/格式校验仍需执行。
 
 ## 交付
 
 返回 MP4、精翻工作 ASS、dub_manifest。配音完成后返回服务端最终视频和配音时间轴 ASS。明确合成/参考不足等错误，不把缺失台词当成功。
+
+只交字幕时，优先交付观看用分页 ASS；工作 ASS 标明导入/审校用途，保留源定位。
