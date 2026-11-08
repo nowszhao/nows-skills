@@ -28,6 +28,7 @@ for s in skills/*/; do cp -R "$s" "$SKILLS_DIR/"; done
 | `nows-llm-wiki` | 把 Obsidian vault 重组为 PARA + LLM Wiki | `帮我整理一下我的 Obsidian vault` |
 | `nows-iplus-reading` | 按 i+1 假设设计小节级精读路径 | `帮我精读《思考，快与慢》` |
 | `nows-content-distill` | 把文章/视频压成可复述的内化卡片 | `帮我把这篇文章 distill 一下` |
+| `nows-qpyramid` | 长内容拆成证据可追溯的 FAQ 问题金字塔 | `把这篇论文拆成问题金字塔` |
 | `nows-article-anlyze` | 长文/研报/Keynote 拆成可交互单文件 HTML | `帮我把这篇研报拆解成可视化 HTML` |
 | `nows-concept-deptree` | 梳理概念前置依赖，生成阶梯学习路径 | `学大语言模型需要什么前置知识` |
 | `nows-screenshot2code` | 截图/设计稿转像素级前端代码 | `帮我把这张截图还原成 HTML` |
