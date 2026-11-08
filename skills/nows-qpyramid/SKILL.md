@@ -1,9 +1,9 @@
 ---
 name: nows-qpyramid
-description: 将长文章、论文、博客、访谈、播客、演讲、YouTube 视频或逐字稿拆解为可追溯证据的 FAQ 问题金字塔。适用于“总结这篇文章/视频提出的问题与答案”“提炼论证及依据”“找出共识、争议和作者独特观点”“分析观点关系”“发现认知增量”，不是只要求一段普通摘要时。
+description: 将文章、论文、播客、演讲、视频字幕拆解为可追溯证据的 FAQ 问题金字塔，并生成可交互的 HTML 知识驾驶舱。适用于“总结这篇文章/视频提出的问题与答案”“提炼论证及依据”“找出共识、争议和作者独特观点”“分析观点关系”“发现认知增量”，不是只要求一段普通摘要时。
 ---
 
-# Question Pyramid｜证据驱动的问题金字塔
+# Question Pyramid Visual｜证据驱动的交互式问题金字塔
 
 ## 使命
 
@@ -64,7 +64,7 @@ description: 将长文章、论文、博客、访谈、播客、演讲、YouTube
 
 ### 第 5 步｜排序并交付（信息密度优先）
 
-严格遵照 `references/output-contract.md`，顺序为：
+内容层严格遵照 `references/output-contract.md`；当宿主支持写文件及运行 Python 时，**默认以结构化 JSON + 交互式 HTML 为最终主产物**，而不是把下列内容全部堆成一篇长 Markdown。可视化输出须执行 `references/visual-output-contract.md`，顺序为：
 
 1. **来源、可读范围与可靠性警告**（如有缺口）；
 2. **30 秒速读：核心问题、作者结论、主要论证、最大盲区**；
@@ -75,6 +75,8 @@ description: 将长文章、论文、博客、访谈、播客、演讲、YouTube
 7. **尚无答案的问题、关键矛盾与下一步值得追问的 3 个问题**（不得伪造原文作答）。
 
 默认把重复的背景介绍压缩为一句，将全文最值得关注的内容放在前面；**不能为了精简牺牲关键 FAQ 覆盖**。复杂材料优先“上面看主干、下面钻证据”的层次化输出，不给一大坨摘要。
+
+在具备文件写入能力时，先构建 `analysis.json`，再使用 `python scripts/build_report.py analysis.json report.html` 将 JSON 嵌入独立 HTML。生成的 HTML 应在离线浏览器中直接打开，不依赖 CDN。若无文件写入/脚本运行能力，返回完整文本分析并说明无法交付 HTML 文件；不得伪称已生成。**不要把内置虚构示例作为真实材料的分析结果。**
 
 ## 任务模式与调用
 
@@ -100,6 +102,10 @@ description: 将长文章、论文、博客、访谈、播客、演讲、YouTube
 ## 参考文件（按需读取）
 
 - `references/output-contract.md`：正式中文输出结构与模板。生成报告前使用。
+- `references/visual-output-contract.md`：HTML 布局、JSON 数据契约与文件生成规则。每次准备生成 HTML 时必读。
+- `assets/renderer.html`：独立、无依赖的交互式 HTML 模板。
+- `scripts/build_report.py`：将内容数据嵌入 HTML 的可执行脚本，确保离线可用。
+- `examples/sample-report.json`：仅供理解字段结构的虚构示例。
 - `references/evidence-taxonomy.md`：四维观点标注、证据评级、共识核验的判定边界。需要分类前使用。
 - `references/long-form-workflow.md`：长文、播客、视频、字幕分片处理及覆盖审计。材料很长或可读性不完整时使用。
 - `examples/mini-demo.md`：简短虚构材料的分析示例（只为演示格式，非技术事实依据）。
