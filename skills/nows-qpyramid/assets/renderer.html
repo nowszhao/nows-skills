@@ -37,6 +37,136 @@ a{color:var(--teal);text-decoration:none}a:hover{text-decoration:underline}.shel
 .map-viewport{height:810px}
 @media(max-width:1120px){.map-viewport{height:750px}}
 @media(max-width:780px){.map-viewport{height:610px}}
+
+/* Question Pyramid — Atelier edition: editorial density + interactive clarity */
+:root{
+  --bg:#f6f6f3;--paper:#fff;--surface:#f9faf8;
+  --ink:#172b2d;--ink2:#344648;--muted:#677878;--muted2:#8b9b99;
+  --line:#e3e8e5;--line2:#d7e0db;
+  --teal:#14756b;--teallight:#e8f5f0;--blue:#3e6e83;--bluelight:#ebf3f6;
+  --gold:#99632c;--goldlight:#faf3e8;--indigo:#575e8d;
+  --shadow:0 10px 30px rgba(20,50,44,.045);--radius:14px;
+}
+html{scroll-padding-top:88px}body{background:var(--bg);color:var(--ink);font-size:14px;line-height:1.68;letter-spacing:-.007em}
+.shell{max-width:1376px;padding:0 32px 64px}
+.top{height:64px;position:sticky;top:0;z-index:20;background:rgba(246,246,243,.93);backdrop-filter:blur(20px);border-bottom:1px solid #dce4df;gap:14px}
+.brand{gap:10px}.brand-mark{width:33px;height:33px;border-radius:9px;background:#193b39;font-size:18px;box-shadow:inset 0 1px rgba(255,255,255,.16)}
+.brand-main{font-weight:790;font-size:14px;letter-spacing:-.03em}.brand-small{font-size:8px;letter-spacing:.12em;margin-top:2px;color:#82928f}
+.top-nav{gap:23px}.top-nav a{font-size:12px;font-weight:600;color:#60716f;transition:color .2s}
+.top-nav a:hover{color:#0e6c61}.top-actions{gap:6px}.top-actions>.meta-pill{display:none}
+.btn{font-size:11px;font-weight:700;padding:7px 11px;border-radius:7px;min-height:33px;border-color:#d4ded9}
+.btn.text{background:transparent;border-color:transparent}.btn.text:hover{background:#e8f0ec}
+.hero{padding:30px 0 18px;display:grid;grid-template-columns:minmax(0,1.15fr) minmax(310px,.65fr);column-gap:56px;row-gap:9px;align-items:center}
+.hero-topline{grid-column:1/-1;font-size:10px;font-weight:780;letter-spacing:.16em;color:#14766b;gap:8px}
+.hero-topline:before{width:19px;height:2px}
+.hero h1{font-size:clamp(36px,3.3vw,49px);line-height:1.18;letter-spacing:-.055em;margin:8px 0 0;max-width:800px;font-weight:820}
+.hero h1 span{color:#106f64}.hero-sub{max-width:440px;font-size:13px;color:#4d6261;line-height:1.83;margin:2px 0 0}
+.hero-meta{grid-column:1;margin-top:10px;gap:6px}.meta-pill{border:1px solid #e1e8e3;background:#edf2ee;color:#657572;padding:4px 8px;font-size:10px;font-weight:650;border-radius:6px}
+.hero-summary{grid-column:2;margin:8px 0 0;font-size:10.5px;line-height:1.55;color:#81918c;max-width:440px}
+.section{margin-top:37px;scroll-margin-top:80px}
+#thesis.section{margin-top:22px!important}
+.section-head{display:flex;align-items:end;justify-content:space-between;gap:16px;margin-bottom:13px;padding-bottom:11px;border-bottom:1px solid #e1e8e2}
+.section-head h2{font-size:23px;line-height:1.25;letter-spacing:-.035em;margin:2px 0 0;font-weight:790}
+.section-eyebrow{font-size:10px;color:#348074;letter-spacing:.11em;font-weight:780}
+.section-head .sub{font-size:11px;color:#81908c;max-width:460px;line-height:1.55}
+.major-card{border-radius:14px;padding:27px 31px 23px;background:linear-gradient(110deg,#152f30 0%,#1d4441 100%);box-shadow:0 9px 25px rgba(11,49,46,.12)}
+.major-card:before{width:320px;height:320px;right:-116px;top:-165px;border-color:#ffffff12;box-shadow:0 0 0 68px #ffffff04,0 0 0 142px #ffffff02}
+.major-card:after{display:none}
+.major-label{font-size:10px;color:#9cdec9;letter-spacing:.11em}
+.major-statement{font-size:clamp(27px,2.6vw,34px);line-height:1.35;letter-spacing:-.037em;margin:11px 0 10px;max-width:950px;font-weight:790}
+.major-statement strong{color:#a0ead7}.major-explain{font-size:12.5px;line-height:1.85;color:#cededb;max-width:1060px}
+.major-foot{margin-top:17px;padding-top:13px;border-top:1px solid #ffffff23}
+.major-foot p{font-size:11px;color:#abc5bf}
+.major-link{border-radius:7px;padding:6px 11px;font-size:11px;border-color:#8fbcb34f;color:#d1f0e9}
+.principles{grid-template-columns:repeat(4,minmax(0,1fr));gap:0;margin-top:10px;background:#fff;border:1px solid #dfe7e2;border-radius:12px;overflow:hidden}
+.principle{border:0;border-radius:0;box-shadow:none;padding:12px 15px 13px;min-height:82px;background:transparent}
+.principle+.principle{border-left:1px solid #e6ebe7}
+.principle:hover{background:#f0f7f3}.principle b{font-size:12px;font-weight:780;color:#283e3a;margin-bottom:3px}.principle span{font-size:11px;line-height:1.55;display:block;color:#70807c}.principle i{font-size:10px;letter-spacing:.06em;color:#36877d}
+.insights{gap:10px}.insight{min-height:226px;border-radius:12px;padding:18px 19px 17px;box-shadow:none;border-color:#dde6e0;position:relative;overflow:hidden;transition:transform .2s,border-color .2s,box-shadow .2s}
+.insight:hover{transform:translateY(-2px);border-color:#99beb3;box-shadow:0 12px 28px rgba(24,74,57,.09)}
+.insight:after{content:'↗';position:absolute;right:18px;top:14px;color:#9fb2aa;font-size:19px;font-weight:400}
+.insight .index{font-size:10px;font-weight:760;letter-spacing:.09em;color:#3d877c}
+.insight h3{font-size:17px;line-height:1.45;margin:14px 0 7px;font-weight:760;letter-spacing:-.025em}
+.insight .reason{font-size:12px;line-height:1.72;color:#566a67;margin-bottom:12px}
+.insight .difference{font-size:11px;line-height:1.55;padding-top:10px;border-top:1px solid #e6ece7;color:#75837e}
+.insight .difference strong{color:#2d796f}.insight .tags{margin-top:9px}
+.chip{font-weight:650;border-radius:5px;padding:3px 7px;font-size:10px;background:#edf6f2;border-color:#d8e9e1;color:#357b6f}
+.chip.blue{background:#f0f4f6;border-color:#e1e8ec;color:#557583}.chip.gray{background:#f3f5f4;border-color:#e7ebe8;color:#6c7b78}.chip.amber{background:#fbf4e9;border-color:#f1e3c9;color:#996d34}
+.statsline{margin-top:12px;gap:0;font-size:11px;color:#73847e}
+.statsline span{padding:0 13px}.statsline span:first-child{padding-left:0}.statsline span+span{padding-left:13px;border-left:1px solid #dce5df}.statsline b{font-size:12px;color:#314b43}
+.retelling-card{display:grid;grid-template-columns:160px 1fr;align-items:start;gap:24px;border:1px solid #dce7df;border-left:0;border-radius:12px;padding:20px 25px;box-shadow:none;background:#fff}
+.retelling-accent{font-size:11px;line-height:1.65;letter-spacing:0;color:#6f837c;font-weight:600;margin:0;padding:4px 22px 0 0;border-right:1px solid #e0e9e3;min-height:100%}
+.retelling-accent:before{content:'KEY POINTS';display:block;font:700 10px/1.4 ui-monospace,SFMono-Regular,Consolas,monospace;letter-spacing:.14em;color:#2d796f;margin-bottom:10px}
+.retelling-card p{font-size:13px;color:#344c44;line-height:1.95;max-width:none}
+.workbench{border-radius:13px;box-shadow:0 12px 34px #243c3110;border-color:#d5e0da}
+.work-toolbar{padding:8px 12px;min-height:52px;gap:8px;border-color:#e2e9e3}
+.view-tabs{background:#f1f4f1;border:1px solid #e4eae6;border-radius:8px;gap:0;padding:3px}
+.view-tab{font-size:11px;padding:6px 11px;border-radius:5px;font-weight:680}.view-tab.active{background:#fff;color:#176a60;box-shadow:0 1px 4px #172b2315}
+.search{padding:6px 9px;background:#fbfcfb;border:1px solid #dee7e1;width:175px;min-height:33px;border-radius:7px;font-size:11px}
+.search:focus{border-color:#4c9a88;outline:2px solid #cce9df;outline-offset:0}
+.tool{font-size:11px;padding:6px 9px;border-radius:7px;min-height:32px;font-weight:650;border-color:#dce6df;color:#5d7469}
+.tool:hover,.tool.active{background:#eaf5ef;border-color:#b2d9c9;color:#197263}.tool.symbol{min-height:31px;height:31px;width:31px;font-size:17px;padding:0}
+.mapbar{height:40px;padding:0 13px;background:#f9fbf9;border-color:#e3eae4}
+.mapbar span{font-size:11px;color:#7b8d84}.mapbar b{font-weight:750;color:#315e52}.mapbar .right{gap:4px}
+.map-viewport{height:640px;background-color:#fafcfb;background-image:radial-gradient(circle,#dae6df .75px,transparent .75px);background-size:18px 18px}
+.graph-node{border-radius:10px;background:#fff;padding:9px 13px;gap:5px;box-shadow:0 3px 9px rgba(28,61,50,.06);border-color:#dfe7e2}
+.graph-node:hover{border-color:#7daea0;box-shadow:0 6px 19px #1b765926;transform:none}
+.graph-node.selected{border-color:#1d8f79;background:#f0f8f3;box-shadow:0 0 0 3px #58ae9433,0 3px 14px #246e5618}
+.graph-node.root{background:#1c3d39;border-color:#1c3d39;border-radius:12px;padding:15px 17px}
+.graph-node.root.selected{border-color:#9aded0;box-shadow:0 0 0 3px #65d3b933,0 5px 22px #163b3322}
+.graph-node.branch{border-left:3px solid var(--branch-color,#2f9c92)}
+.graph-node .node-index{font-size:10px;letter-spacing:.055em;font-weight:730;color:#368b7d}
+.graph-node.root .node-index{color:#a9e2d4}.graph-node .node-text{font-size:13px;line-height:1.44;font-weight:720}.graph-node.root .node-text{font-size:17px}.graph-node.branch .node-text{font-size:13.5px}
+.graph-node .node-mini{font-size:10px;color:#bdcfc7}.graph-node.root .node-mini{color:#a9c9bc}
+.map-guide{padding:8px 13px;background:#fbfcfb;font-size:10.5px;border-color:#e4ebe5;gap:11px}
+.map-guide .legend{gap:13px}.legend-dot{width:6px;height:6px;margin-right:5px}.map-overlay{background:rgba(13,33,26,.22)}
+.detail-drawer{width:min(435px,96%);background:#fefefd;border-color:#dce7e0;box-shadow:-15px 0 42px #173d3233}
+.drawer-bar{padding:10px 16px;background:#fffffff3;border-color:#e3eae5}.drawer-bar b{font-size:11px;color:#3d796c;letter-spacing:.085em}
+.drawer-close{width:29px;height:29px;background:#f1f5f1;border-radius:6px;font-size:17px;color:#5c746a}
+.drawer-body{padding:20px 22px 27px}.detail-title{font-size:21px;line-height:1.41;font-weight:790;margin:7px 0 12px}
+.detail-lead{font-size:13px;line-height:1.87;color:#284740;background:#f0f7f2;border-radius:9px;padding:13px 14px;border:1px solid #e1eee5;margin:16px 0}
+.detail-field{margin-top:17px;padding-top:13px;border-color:#e4eae5}.detail-field h4{font-size:10px;letter-spacing:.08em;color:#568177;margin-bottom:6px}.detail-field p,.detail-field ul{font-size:12px;line-height:1.83;color:#425a53}
+.evidence-link{padding:10px 11px;background:#fafbf9;border-color:#e0e7e0;border-left:2px solid #b18b52;border-radius:5px;color:#43584d;font-size:11.5px;line-height:1.72}
+.evidence-link:hover{background:#eef7f0;border-color:#8cb8a2}.evidence-link b{font-size:10px;color:#92713b}
+.alt-view{min-height:640px;max-height:720px;padding:19px 24px;background:#fafbf9}
+.alt-intro{font-size:12px;margin-bottom:15px}.relation-grid{gap:9px}.relation-card{padding:13px 15px;border-radius:9px}
+.relation-card p{font-size:11.5px}.source-item{padding:12px 5px;font-size:12px}
+.gap-intro{padding:10px 13px;border-radius:8px;font-size:11.5px;margin-bottom:10px;background:#faf7f0;border-color:#f1eadb;color:#8b775b}
+.gap-grid{gap:9px}.gap-col{gap:9px}.gap-item{border-radius:10px;padding:0 14px;box-shadow:none;border-color:#e2e7e2}
+.gap-item summary{padding:15px 0;align-items:center;gap:10px}.gap-number{font-size:10px;padding:3px 7px;border-radius:5px;background:#f9f1e6;color:#a17945}
+.gap-title{font-size:13.5px;line-height:1.5;font-weight:750;color:#314540}.gap-state{font-size:10px;padding:3px 7px;background:#f2f5f2}
+.gap-item summary:after{font-size:16px;color:#819288}.gap-item[open]{border-color:#d6c4a6;box-shadow:0 8px 22px #5d4d3510}
+.gap-content{font-size:12px;padding-bottom:14px}.gap-content h4{font-size:11px;margin:12px 0 4px}.basis{font-size:11px;padding:9px 11px;background:#faf8f3}
+.foot{margin-top:38px;padding-top:16px;font-size:10.5px;color:#899994}
+/* Make focus and keyboard operation visible without bulky default controls. */
+button:focus-visible,input:focus-visible,summary:focus-visible,select:focus-visible{outline:2px solid #53a994;outline-offset:2px}
+::-webkit-scrollbar{width:5px;height:5px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:#cbd7cf;border-radius:50px;border:0}*{scrollbar-width:thin;scrollbar-color:#cad7cf transparent}
+@media(min-width:1700px){.map-viewport{height:675px}}
+@media(max-width:1160px){.shell{padding:0 21px 58px}.hero{column-gap:27px}.principle{padding:11px}.insight{padding:17px}.map-viewport{height:610px}}
+@media(max-width:800px){
+ .top{height:auto;min-height:60px;padding:10px 0;gap:6px}.top-nav{width:100%;order:3;gap:17px;overflow-x:auto;scrollbar-width:none;padding:4px 0 1px}.top-nav a{white-space:nowrap}
+ .shell{padding:0 15px 48px}.hero{display:block;padding:24px 0 9px}.hero h1{font-size:36px;margin:13px 0 9px}.hero-sub{font-size:12.5px}.hero-meta{margin-top:13px}.hero-summary{font-size:10px;margin-top:13px}
+ .section{margin-top:31px}.section-head{align-items:end}.section-head .sub{display:none}.section-head h2{font-size:21px}
+ .major-card{padding:23px 20px 18px}.major-statement{font-size:27px}.major-explain{font-size:12px}
+ .principles{grid-template-columns:repeat(2,1fr)}.principle{border-left:0!important;border-top:1px solid #e6ebe7}.principle:nth-child(-n+2){border-top:0}.principle:nth-child(2n){border-left:1px solid #e6ebe7!important}
+ .insights{grid-template-columns:1fr}.insight{min-height:unset;padding:17px 18px}.insight h3{margin:9px 0 5px}.insight .reason{margin-bottom:11px}
+ .retelling-card{display:block;padding:16px 18px}.retelling-accent{min-height:0;border-right:0;border-bottom:1px solid #e0e9e3;padding:0 0 9px;margin-bottom:10px}.retelling-accent:before{margin-bottom:4px}.retelling-card p{font-size:12.5px;line-height:1.86}
+ .work-toolbar{padding:8px}.work-tools{width:100%;gap:5px}.search{flex:1;min-width:120px}.view-tabs{width:100%;justify-content:space-between}.view-tab{flex:1}.work-tools .tool{font-size:10px;padding:6px 8px}
+ .mapbar{padding:4px 9px;min-height:42px;height:auto;gap:4px}.mapbar span{font-size:10px;line-height:1.45}.mapbar .right{flex-shrink:0}.map-viewport{height:560px}.map-guide{padding:8px}.map-guide .legend{gap:8px}.alt-view{min-height:560px;padding:18px 14px}
+ .gap-grid{grid-template-columns:1fr}.gap-title{font-size:13px}
+}
+@media(max-width:470px){.hero h1{font-size:32px}.major-statement{font-size:24px}.principles{grid-template-columns:1fr}.principle:nth-child(2){border-top:1px solid #e6ebe7}.principle:nth-child(2n){border-left:0!important}.mapbar>span{max-width:60%}.detail-drawer{width:100%}.top-actions>.btn.text{display:none}.map-guide #sourceNotice{display:none}}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{transition:none!important}}
+
+
+/* Chapter locator. Tiny, deliberate jump controls keep the open map readable. */
+.mapbar{gap:10px}
+.mapbar .map-status{white-space:nowrap;flex-shrink:0;font-size:10px;color:#667e72}
+.chapter-nav{display:flex;align-items:center;justify-content:center;gap:4px;flex:1;min-width:0}
+.chapter-btn{width:28px;height:28px;border-radius:7px;border:1px solid #e0e9e3;background:#fff;color:#6c847a;font:700 10px ui-monospace,SFMono-Regular,Consolas,monospace;transition:background .2s,border-color .2s}
+.chapter-btn:hover,.chapter-btn.active{border-color:#8cc5b3;background:#e8f4ed;color:#176e60}
+@media(max-width:800px){.mapbar{flex-wrap:wrap}.chapter-nav{order:3;flex-basis:100%;justify-content:flex-start;overflow:auto;padding:2px 0 3px}.mapbar .right{margin-left:auto}.chapter-btn{flex:0 0 30px}}
+@media(max-width:470px){.principles{grid-template-columns:repeat(2,minmax(0,1fr))}.principle:nth-child(2){border-top:0}.principle:nth-child(2n){border-left:1px solid #e6ebe7!important}}
 </style>
 </head>
 <body>
@@ -62,12 +192,12 @@ a{color:var(--teal);text-decoration:none}a:hover{text-decoration:underline}.shel
 <div class="section-head"><div><div class="section-eyebrow">02 / WHAT'S DIFFERENT</div><h2 id="insightHeading">这段分享里值得记下的三点</h2></div><p class="sub">每条观点都能追溯到相应的问题和材料。</p></div>
 <div class="insights" id="insightCards"></div><div class="statsline" id="reportNumbers"></div>
 </section>
-<section aria-labelledby="retellingHeading" class="section" id="retelling"><div class="section-head"><div><div class="section-eyebrow">03 / CONTENT RETELLING</div><h2 id="retellingHeading">内容复述</h2></div><p class="sub">用约 200 字交代讲者讲了什么，保留重要限制。</p></div><div class="retelling-card"><div class="retelling-accent">读完这一段，再决定要不要深入导图。</div><p id="retellingText"></p></div></section><section aria-labelledby="mapHeading" class="section" id="knowledge">
+<section aria-labelledby="retellingHeading" class="section" id="retelling"><div class="section-head"><div><div class="section-eyebrow">03 / CONTENT RETELLING</div><h2 id="retellingHeading">内容复述</h2></div><p class="sub">约 300 字，按重点复述原文，不罗列次要细节。</p></div><div class="retelling-card"><div class="retelling-accent">按内容重点复述，先讲最值得记住的部分。</div><p id="retellingText"></p></div></section><section aria-labelledby="mapHeading" class="section" id="knowledge">
 <div class="section-head"><div><div class="section-eyebrow">04 / QUESTION MAP</div><h2 id="mapHeading">文章怎样讨论这些问题</h2></div><p class="sub" id="mapDescription">所有主线始终展开，点击节点查看答案和依据。</p></div>
 <div class="workbench">
 <div class="work-toolbar"><div aria-label="阅读视图" class="view-tabs" role="tablist"><button aria-selected="true" class="view-tab active" data-view="map" role="tab">问题导图</button><button aria-selected="false" class="view-tab" data-view="relations" role="tab">论证关系</button><button aria-selected="false" class="view-tab" data-view="sources" role="tab">相关原文</button></div>
-<div class="work-tools"><input aria-label="搜索问题" class="search" id="search" placeholder="查找问题、观点…" type="search"/><button class="tool" id="novelOnly" title="突出独特观点">只看不同寻常的观点</button><button class="tool" id="showDetail">打开问题详情</button></div></div>
-<div class="mapbar" id="mapbar"><span><b id="mapHint">全部问题</b>　点击节点看依据（画布不移动） · 拖动画布平移 · 滚轮缩放</span><div class="right"><button class="tool symbol" id="zoomMinus" title="缩小">−</button><button class="tool symbol" id="zoomPlus" title="放大">+</button><button class="tool" id="fitMap">适应画面</button></div></div>
+<div class="work-tools"><input aria-label="搜索问题" class="search" id="search" placeholder="查找问题、观点…" type="search"/><button class="tool" id="novelOnly" title="突出独特观点">突出独特观点</button><button class="tool" id="showDetail">查看当前问题</button></div></div>
+<div class="mapbar" id="mapbar"><span class="map-status"><b id="mapHint">全部问题</b></span><div class="chapter-nav" id="chapterNav" aria-label="选择问题主线"></div><div class="right"><button class="tool symbol" id="zoomMinus" title="缩小">−</button><button class="tool symbol" id="zoomPlus" title="放大">+</button><button class="tool" id="focusMap" title="放大到适合阅读的比例；不会影响之后点击节点的位置">阅读视角</button><button class="tool" id="fitMap">全览</button></div></div>
 <div style="position:relative">
 <div aria-label="可拖动的问题金字塔导图" class="map-viewport" id="viewport"><div class="graph-layer" id="graphLayer"><svg class="graph-paths" id="graphPaths" xmlns="http://www.w3.org/2000/svg"></svg><div id="graphNodes"></div></div></div>
 <div class="alt-view" id="relationView"></div><div class="alt-view" id="sourceView"></div>
@@ -102,7 +232,7 @@ const edges=()=>A(data?.relations);
 const branchColors=['#178f84','#397eae','#8a70b6','#c39251','#568d84','#6286ac','#b08082'];
 function dataCheck(d){if(!d||!Array.isArray(d.nodes)||!d.nodes.length||!d.nodes.some(n=>n.parent===null))throw Error('导入文件必须包含 nodes 和核心问题');return d}
 function pTags(tags){return A(tags).filter(Boolean).map((t,i)=>`<span class="chip ${i===1?'blue':i>1?'gray':''}">${esc(readableTag(t))}</span>`).join('')}
-function init(d){data=dataCheck(d);selected=root().id;search='';$('search').value='';novelOnly=false;opened=false;closeDrawer();view='map';$('novelOnly').classList.remove('active');renderAll();switchView('map');requestAnimationFrame(()=>fit());}
+function init(d){data=dataCheck(d);selected=root().id;search='';$('search').value='';novelOnly=false;opened=false;closeDrawer();view='map';$('novelOnly').classList.remove('active');renderAll();switchView('map');requestAnimationFrame(()=>focusMap());}
 function renderAll(){drawTop();drawInsights();drawGaps();renderGraph();drawRelations();drawSources();renderDetail();}
 function drawTop(){const m=data.meta||{},d=display();
  document.title=(m.title||'知识驾驶舱')+' · Question Pyramid';
@@ -137,16 +267,18 @@ function drawInsights(){let ins=A(data.insights);if(!ins.length)ins=A(data.nodes
  $('insightCards').querySelectorAll('button').forEach(b=>b.onclick=()=>goNode(b.dataset.ref));}
 function gapHtml(g,i){return `<details class="gap-item"><summary><span class="gap-number">${String(i+1).padStart(2,'0')}</span><span class="gap-title">${esc(g.question)}</span><span class="gap-state">${esc(labelStatus(g.answerStatus))}</span></summary><div class="gap-content"><span class="chip amber">${esc(g.category||'待审查问题')}</span><h4>原文已说明什么</h4><p>${esc(g.sourceProvides||'当前分析材料中尚未找到实质性回答。')}</p><h4>还有什么没讲清</h4><ul>${A(g.missing).map(x=>`<li>${esc(x)}</li>`).join('')}</ul><h4>需要补充哪些信息</h4><ul>${A(g.sufficiencyCriteria).map(x=>`<li>${esc(x)}</li>`).join('')}</ul><h4>下一步怎么查</h4><p>${esc(g.nextSteps||'需要后续核查；不得推定作者原本给出了答案。')}</p><p class="basis">审查依据：${esc(g.basis||data.meta?.analysisBasis||'未说明')}</p></div></details>`}
 function drawGaps(){const gs=A(data.criticalGaps);if(!gs.length){$('gapCards').innerHTML='<div class="no-result">这份数据没有附带待追问问题的整理。</div>';return;}const cols=[[],[]];gs.forEach((g,i)=>cols[i%2].push(gapHtml(g,i)));$('gapCards').innerHTML=cols.map(items=>'<div class="gap-col">'+items.join('')+'</div>').join('')}
-function renderGraph(){const branches=A(data.nodes).filter(n=>n.parent===root().id),rootNode=root();let x0=40,x1=420,x2=862,w0=294,w1=326,w2=376;
- const nodeRects={},paths=[];let y=30,branchM=[];for(let i=0;i<branches.length;i++){const b=branches[i],kids=A(data.nodes).filter(n=>n.parent===b.id),visibleKids=kids;const gap=17,leafH=66,sp=12,slot=Math.max(82,visibleKids.length?(visibleKids.length*(leafH+sp)-sp):82);const bh=82,by=y+(slot-bh)/2;nodeRects[b.id]={x:x1,y:by,w:w1,h:bh,color:branchColors[i%branchColors.length],role:'branch',order:i};branchM.push({b,kids,visibleKids,center:by+bh/2,color:branchColors[i%branchColors.length]});visibleKids.forEach((k,j)=>nodeRects[k.id]={x:x2,y:y+j*(leafH+sp),w:w2,h:leafH,color:branchColors[i%branchColors.length],role:'leaf'});y+=slot+gap;}
- const graphH=Math.max(650,y+18),rY=(branchM[0]?.center+branchM[branchM.length-1]?.center)/2-63||260;nodeRects[rootNode.id]={x:x0,y:rY,w:w0,h:126,color:'#128a7e',role:'root'};
- const W=1290,H=graphH;for(const {b,visibleKids,center,color} of branchM){const r=nodeRects[rootNode.id],a=nodeRects[b.id],fromX=r.x+r.w,toX=a.x,fromY=r.y+r.h/2,toY=a.y+a.h/2;paths.push(`<path d="M${fromX},${fromY} C${fromX+66},${fromY} ${toX-73},${toY} ${toX},${toY}" stroke="${color}" stroke-width="2.4" opacity=".70" fill="none"/>`);
+function renderGraph(){const branches=A(data.nodes).filter(n=>n.parent===root().id),rootNode=root();let x0=34,x1=372,x2=770,w0=270,w1=295,w2=350;
+ const nodeRects={},paths=[];let y=30,branchM=[];for(let i=0;i<branches.length;i++){const b=branches[i],kids=A(data.nodes).filter(n=>n.parent===b.id),visibleKids=kids;const gap=15,leafH=63,sp=10,slot=Math.max(78,visibleKids.length?(visibleKids.length*(leafH+sp)-sp):78);const bh=76,by=y+(slot-bh)/2;nodeRects[b.id]={x:x1,y:by,w:w1,h:bh,color:branchColors[i%branchColors.length],role:'branch',order:i};branchM.push({b,kids,visibleKids,center:by+bh/2,color:branchColors[i%branchColors.length]});visibleKids.forEach((k,j)=>nodeRects[k.id]={x:x2,y:y+j*(leafH+sp),w:w2,h:leafH,color:branchColors[i%branchColors.length],role:'leaf'});y+=slot+gap;}
+ const graphH=Math.max(650,y+18),rY=(branchM[0]?.center+branchM[branchM.length-1]?.center)/2-56||260;nodeRects[rootNode.id]={x:x0,y:rY,w:w0,h:112,color:'#128a7e',role:'root'};
+ const W=1170,H=graphH;for(const {b,visibleKids,center,color} of branchM){const r=nodeRects[rootNode.id],a=nodeRects[b.id],fromX=r.x+r.w,toX=a.x,fromY=r.y+r.h/2,toY=a.y+a.h/2;paths.push(`<path d="M${fromX},${fromY} C${fromX+66},${fromY} ${toX-73},${toY} ${toX},${toY}" stroke="${color}" stroke-width="2.4" opacity=".70" fill="none"/>`);
  for(const leaf of visibleKids){const z=nodeRects[leaf.id],sx=a.x+a.w,sy=a.y+a.h/2,tx=z.x,ty=z.y+z.h/2;paths.push(`<path d="M${sx},${sy} C${sx+58},${sy} ${tx-65},${ty} ${tx},${ty}" stroke="${color}" stroke-width="1.8" opacity=".52" fill="none"/>`);}}
  layout={width:W,height:H,rects:nodeRects};$('graphLayer').style.width=W+'px';$('graphLayer').style.height=H+'px';$('graphPaths').setAttribute('width',W);$('graphPaths').setAttribute('height',H);$('graphPaths').setAttribute('viewBox',`0 0 ${W} ${H}`);$('graphPaths').innerHTML=paths.join('');
  let shown=A(data.nodes); // Every FAQ branch and child is always displayed.
  $('graphNodes').innerHTML=shown.map(n=>{const r=nodeRects[n.id],role=r.role,answered=n.answerStatus==='full'?'充分回答':labelStatus(n.answerStatus),match=(n.question+' '+n.answer+' '+(n.novelty||'')).toLowerCase().includes(search.toLowerCase());const isNovel=(n.novelty||'').includes('差异')||(n.novelty||'').includes('新信息');const dim=(search&&!match&&role!=='root')||(novelOnly&&!isNovel&&role==='leaf');return `<button type="button" class="graph-node ${role} ${selected===n.id?'selected':''} ${dim?'dim':''}" aria-pressed="${selected===n.id}" data-node="${esc(n.id)}" style="left:${r.x}px;top:${r.y}px;width:${r.w}px;height:${r.h}px;--branch-color:${r.color}" title="${esc(n.question)}"><span class="node-index">${esc(n.id)} / ${role==='branch'?'主要话题':role==='root'?'核心命题':'具体问题'}</span><span class="node-text">${esc(n.question)}</span>${role==='root'?'<span class="node-mini">点击查看核心结论与论证</span>':''}</button>`}).join('');
  $('graphNodes').querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>onGraphNode(b.dataset.node)));
- $('mapHint').textContent=`${branches.length} 条主线 · ${A(data.nodes).length-1-branches.length} 个具体问题（全部展开）`;
+ $('mapHint').textContent=`${branches.length} 条主线 / ${A(data.nodes).length-1-branches.length} 个问题`;
+  $('chapterNav').innerHTML=branches.map((b,i)=>`<button type="button" class="chapter-btn" data-branch="${esc(b.id)}" title="${esc(b.question)}" aria-label="查看主线 ${i+1}：${esc(b.question)}">${String(i+1).padStart(2,'0')}</button>`).join('');
+  $('chapterNav').querySelectorAll('[data-branch]').forEach(btn=>btn.onclick=()=>focusBranch(btn.dataset.branch));
  applyCamera();}
 // A map-node click is a selection, not a navigation action. Keep the camera exactly where it is.
 function updateSelectedNode(){
@@ -164,6 +296,10 @@ function onGraphNode(id){
  showNodeDetail(id);
 }
 function centerOn(id){const r=layout?.rects[id];if(!r)return;const vp=$('viewport');camera.x=vp.clientWidth/2-(r.x+r.w/2)*camera.scale;camera.y=vp.clientHeight/2-(r.y+r.h/2)*camera.scale;applyCamera()}
+function focusMap(){if(!layout)return;const vp=$('viewport');const r=layout.rects[selected]||layout.rects[root().id];camera.scale=Math.min(.94,Math.max(.72,(vp.clientWidth-52)/layout.width));camera.x=35-r.x*camera.scale;camera.y=vp.clientHeight/2-(r.y+r.h/2)*camera.scale;applyCamera()}
+// Only explicit chapter navigation repositions the canvas. Clicking a map node never does.
+function focusBranch(id){const r=layout?.rects[id];if(!r)return;selected=id;const vp=$('viewport');camera.scale=Math.min(.94,Math.max(.72,(vp.clientWidth-52)/layout.width));camera.x=115-r.x*camera.scale;camera.y=vp.clientHeight/2-(r.y+r.h/2)*camera.scale;applyCamera();updateSelectedNode()}
+
 function applyCamera(){$('graphLayer').style.transform=`translate(${camera.x}px,${camera.y}px) scale(${camera.scale})`;}
 function fit(){if(!layout)return;const vp=$('viewport'),margin=35;camera.scale=Math.min(1.09,(vp.clientWidth-margin*2)/layout.width,(vp.clientHeight-margin*2)/layout.height);camera.scale=Math.max(.24,camera.scale);camera.x=(vp.clientWidth-layout.width*camera.scale)/2;camera.y=(vp.clientHeight-layout.height*camera.scale)/2;applyCamera()}
 function zoom(by,point=null){const vp=$('viewport');const px=point?.x??vp.clientWidth/2,py=point?.y??vp.clientHeight/2,old=camera.scale,s=Math.max(.24,Math.min(1.55,old*by));camera.x=px-(px-camera.x)*s/old;camera.y=py-(py-camera.y)*s/old;camera.scale=s;applyCamera()}
@@ -198,7 +334,7 @@ function switchView(next){view=next;document.querySelectorAll('.view-tab').forEa
 // Navigation and interactions
 $('claimSource').onclick=()=>goNode(root().id);
 $('showDetail').onclick=()=>{renderDetail();openDrawer()};$('closeDetail').onclick=closeDrawer;$('overlay').onclick=closeDrawer;
-$('fitMap').onclick=fit;$('zoomPlus').onclick=()=>zoom(1.18);$('zoomMinus').onclick=()=>zoom(1/1.18);
+$('fitMap').onclick=fit;$('focusMap').onclick=focusMap;$('zoomPlus').onclick=()=>zoom(1.18);$('zoomMinus').onclick=()=>zoom(1/1.18);
 $('novelOnly').onclick=()=>{novelOnly=!novelOnly;$('novelOnly').classList.toggle('active',novelOnly);renderGraph()};
 $('search').oninput=e=>{search=e.target.value.trim();renderGraph();if(search)fit()};
 Array.from(document.querySelectorAll('.view-tab')).forEach(b=>b.onclick=()=>switchView(b.dataset.view));
@@ -206,7 +342,7 @@ $('viewport').addEventListener('pointerdown',e=>{if(e.target.closest('button'))r
 $('viewport').addEventListener('pointermove',e=>{if(!mouse.down)return;let dx=e.clientX-mouse.x,dy=e.clientY-mouse.y;camera.x=mouse.ox+dx;camera.y=mouse.oy+dy;mouse.moved=true;applyCamera()});
 function endDrag(){mouse.down=false;$('viewport').classList.remove('dragging')};$('viewport').addEventListener('pointerup',endDrag);$('viewport').addEventListener('pointercancel',endDrag);
 $('viewport').addEventListener('wheel',e=>{e.preventDefault();const r=$('viewport').getBoundingClientRect();zoom(e.deltaY<0?1.09:1/1.09,{x:e.clientX-r.left,y:e.clientY-r.top})},{passive:false});
-window.addEventListener('resize',()=>{if(view==='map')fit()});
+window.addEventListener('resize',()=>{if(view==='map')applyCamera()});
 $('exportJson').onclick=()=>{if(!data)return;const u=URL.createObjectURL(new Blob([JSON.stringify(data,null,2)],{type:'application/json;charset=utf-8'}));const a=document.createElement('a');a.href=u;a.download='question-pyramid-analysis.json';a.click();setTimeout(()=>URL.revokeObjectURL(u),500)};
 $('importJson').onclick=()=>$('jsonFile').click();$('jsonFile').onchange=async e=>{const f=e.target.files?.[0];if(!f)return;try{init(JSON.parse(await f.text()))}catch(err){alert('导入失败：'+err.message)}finally{e.target.value=''}};
 try{init(JSON.parse($('qp-data').textContent))}catch(err){console.error(err);$('sourceContext').textContent='加载分析数据失败：'+err.message}

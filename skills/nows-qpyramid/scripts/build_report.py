@@ -36,10 +36,10 @@ def validate(data):
             raise ValueError(f'meta.{field} 必须说明真实且具体的材料范围或内容')
     recap = meta.get('contentRetelling')
     if not nonempty(recap):
-        raise ValueError('meta.contentRetelling 必须提供约 200 字、基于原文的连贯中文复述')
+        raise ValueError('meta.contentRetelling 必须提供约 300 字、基于原文且突出内容重点的连贯中文复述')
     han_count = len(re.findall(r'[\u4e00-\u9fff]', recap))
-    if not 170 <= han_count <= 230:
-        raise ValueError(f'meta.contentRetelling 需约 200 个汉字，当前 {han_count} 个；请控制在 170–230 个汉字')
+    if not 280 <= han_count <= 320:
+        raise ValueError(f'meta.contentRetelling 需约 300 个汉字，当前 {han_count} 个；请控制在 280–320 个汉字')
     if '\n\n' in recap:
         raise ValueError('内容复述必须是自然连续段落，不是列表或分节')
     disp = meta.get('display')
