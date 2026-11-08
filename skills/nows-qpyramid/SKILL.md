@@ -1,6 +1,6 @@
 ---
 name: nows-qpyramid
-description: 将文章、视频字幕、访谈、演讲和播客转写变成可核对原文的中文交互式知识驾驶舱：突出作者的核心主张与真正有增量的观点、用约300字按重点复述内容、完整呈现始终展开的问题导图及答案证据，最后审查关键但未回答的问题。适合知识提炼、FAQ问题金字塔、证据论证分析和信息差研究。
+description: 将文章、视频字幕、访谈、演讲和播客转写变成可核对原文的中文交互式知识驾驶舱：突出作者的核心主张与真正有增量的观点、用约300字按重点复述内容、完整呈现始终展开的问题导图及答案证据，最后审查关键但未回答的问题，并在交付前把 HTML 反向与原文逐项核对、修正并复查。适合知识提炼、FAQ问题金字塔、证据论证分析和信息差研究。
 ---
 
 # Question Pyramid · 知识驾驶舱
@@ -24,11 +24,33 @@ description: 将文章、视频字幕、访谈、演讲和播客转写变成可�
 5. **写约 300 字“内容复述”。** 看完全部材料之后再写，不从标题猜、不拼凑 FAQ 句子。先挑出最重要的 3–5 个信息点：中心问题和结论优先；与结论直接相关的关键做法、论据及代表性案例占主要篇幅；必要边界简要说明。按理解价值而非原文篇幅分配字数，删去寒暄、重复、次要细节、无关轶事和模板式评论。不要为了凑满 300 字写无关信息。把作者的讲述与分析者的判断分开；材料有限时用“所读材料中”而不是声称看过完整视频。保存到 `meta.contentRetelling`。
 6. **审查关键追问。** 再换到读者视角：要相信它或照做，哪些必要问题还得回答？分类 `full`、`partial`、`assertion`、`unanswered`、`contradiction`、`unaudited`；明确“已说了什么、还缺什么、补充什么证据才能回答充分”。详细判据见 `references/answer-sufficiency.md`。审查依据与原文结论分开记录。
 7. **写自然中文。** 按 `references/natural-writing.md`，把套话和抽象名词换成具体动作、对象、结果。问题像真正会问的问题；主张有归属；必要技术词保留，不强行口语化。不在没证据处补全闭环。
-8. **生成可验证的 JSON 与 HTML。** 参考 `references/output-contract.md` 和 `examples/Lauren-GrokBot-分析数据.json`，运行：
+8. **生成待核对的 JSON 与 HTML。** 参考 `references/output-contract.md` 和 `examples/Lauren-GrokBot-分析数据.json`，运行：
 
    `python scripts/build_report.py analysis.json report.html`
 
-   脚本会校验来源、问题树、证据 ID、关键追问和复述字数。页面完全由当前分析 JSON 渲染；不得写死 Lauren Tan 或其他样例作者的内容。
+   构建器仅负责检查结构，并不能保证原文信息没有漏掉。页面完全由当前分析 JSON 渲染；不得写死 Lauren Tan 或其他样例作者的内容。
+9. **最终必须做“原文 → HTML → 原文”的双向反查，并循环修订。** 严格按 `references/reverse-source-audit.md` 操作：
+   - **先锁定独立原文要点台账**（在生成摘要之前根据全文建立，带原始段落/时间码、优先级），不能从生成的 FAQ 倒推要点；逐条检查中心主张、重大论据、具体做法、例子、限定条件与反例是否已在最终 HTML 中被准确、充分地表达。
+   - **从已生成的 HTML 逐项反查原文**：核心主张、独特洞见、300 字复述、全部问题答案、关系线、关键追问中的事实与推论，都要核查出处、数字、否定、语气、主体和边界；要能区分作者原话、归纳和分析者推断。
+   - 发现遗漏、夸大、错配、主次颠倒或结论被简化失真，**修改分析 JSON → 重建 HTML → 打开成品 → 重新复查**。重复直至没有未解决的核心或重大问题；任何 HTML 修改都会使旧审核记录失效。
+   - 运行 `scripts/check_coverage.py` 的 `prepare` / `verify`（命令见下文参考文件）。脚本强制校验重要要点映射、每条主要可见结论的反向审核、HTML 与 JSON 一致性、审核版本哈希；**它无法代替真正的语义阅读**。
+   - 无法拿到完整原文时，只能标明“按已读取内容有限核对”；不能宣称原视频全部覆盖或 100% 无遗漏。若反复修订后仍有重要错误或核对障碍，应报告限制或暂不交付为完整报告，不能伪造通过。
+
+
+## 双向终审执行命令（不可省略）
+
+生成第一版 `analysis.json` 和 `report.html` 之前，先从原文建立 `source-inventory.json`（格式参照 `references/reverse-source-audit.md` 与 `examples/source-inventory-example.json`）：
+
+```bash
+python scripts/build_report.py analysis.json report.html
+python scripts/check_coverage.py prepare source-inventory.json analysis.json report.html audit-review.json
+# 对照原始材料与生成 HTML，逐条填写 audit-review.json 的 items、claimChecks、checks
+python scripts/check_coverage.py verify source-inventory.json analysis.json report.html audit-review.json
+```
+
+- 未通过：修正分析 JSON 和 HTML，再重新 prepare 和逐条审核，旧审核结论不能沿用。
+- `verify` 返回 0 仅表示**登记完整、复核被声明通过、HTML/台账哈希一致**；语义是否正确仍取决于真实的原文核对。返回 3 表示仅能做部分来源核验，不得称全文通过。
+- 审计数据默认作为内部 QA 材料，不在正式 HTML 首屏渲染复杂审计过程。若用户询问是否遗漏，说明来源范围和仍无法核实的部分。
 
 ## 中文内容风格（不可省略）
 
@@ -45,6 +67,8 @@ description: 将文章、视频字幕、访谈、演讲和播客转写变成可�
 - **“内容复述”须为 280–320 汉字的自然单段复述，覆盖原文最重要的信息，而不是把每一节等比例压缩，也不是要点列表或额外评论。**
 - **问题导图全部可见，没有折叠功能；点击任意导图节点前后视角必须保持固定，不能闪动或重置缩放。** 展示受屏幕大小影响时允许通过平移和缩放浏览，不能靠默认隐藏节点减少信息。
 - 每个重要问题都能定位到原文；原文没有答案或素材不完整时明说。
+- **必须在 HTML 成品产生后反向审查原文**：每个 `core/major` 原文要点在可见报告中有对应、解释足够具体且无失真；每条主要 HTML 结论反向对应原文锚点或明确属于分析者推断；未解决的重要问题不得被放行。
+- 修正会导致审核失效，必须重新生成与新 HTML 对应的审核结果。只有原文确实完整可读且全部终审通过，才可称“已完成全文核对”；不能宣称数学意义上的零遗漏。
 - 不靠“作者说过”就推定行业共识；同源转载不算独立核验。
 - 非共识观点与未回答问题分开展示；没有证据不要虚构完整性或确信度。
 - 实际打开 HTML 检查首屏、复述正文、所有导图节点、证据跳转及手机布局。若无法运行浏览器测试，至少进行结构和数据校验，不能声称已实测。
@@ -56,4 +80,6 @@ description: 将文章、视频字幕、访谈、演讲和播客转写变成可�
 - `references/answer-sufficiency.md`：如何提出关键追问、判断回答充分性。
 - `references/evidence-taxonomy.md`：共识、差异、证据强度的独立标签。
 - `references/long-form-workflow.md`：长文/字幕的覆盖与跨片段校验。
+- `references/reverse-source-audit.md`：**必读**，最终成品的双向反查、迭代修复及退出条件。
+- `scripts/check_coverage.py`：校验要点台账、可见结论反查记录、审核版本哈希；不代替语义核对。
 - `examples/Lauren-GrokBot-分析数据.json`：仅作数据结构参考，绝不能复用其中的讲者、观点或数字。

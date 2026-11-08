@@ -1,0 +1,154 @@
+{
+  "sourceLabel": "示例：根据 Lauren/GrokBot 旧 HTML 中提供的零散原文摘录建立的台账；不是完整视频字幕",
+  "scope": "excerpt",
+  "scopeNotes": "仅用于示范结构和验证工具；要核查完整视频，必须重新取得完整字幕和必要画面，按时间段重新建立台账。",
+  "segments": [
+    {
+      "id": "S01",
+      "locator": "旧分析引用 P03、P09（约 00:01:27—00:06:28）",
+      "description": "信任与可执行验证"
+    },
+    {
+      "id": "S02",
+      "locator": "旧分析引用 P11—P12（约 00:10:23—00:12:47）",
+      "description": "Feature Map"
+    },
+    {
+      "id": "S03",
+      "locator": "旧分析引用 P17—P19（约 00:18:05—00:21:49）",
+      "description": "Skill eval"
+    },
+    {
+      "id": "S04",
+      "locator": "旧分析引用 P25—P30（约 00:43:50—00:47:29）",
+      "description": "硬约束"
+    },
+    {
+      "id": "S05",
+      "locator": "旧分析引用 P28—P29（约 00:49:21—00:51:43）",
+      "description": "成本边界"
+    }
+  ],
+  "keyPoints": [
+    {
+      "id": "K01",
+      "segmentIds": [
+        "S01"
+      ],
+      "claim": "信任不足时工程师必须亲自检查每个改动，成为并行开发的瓶颈",
+      "priority": "core",
+      "kind": "argument",
+      "sourceAnchors": [
+        "P03"
+      ],
+      "disposition": "included",
+      "reportRefs": [
+        {
+          "type": "node",
+          "id": "Q1"
+        }
+      ],
+      "omitReason": ""
+    },
+    {
+      "id": "K02",
+      "segmentIds": [
+        "S01"
+      ],
+      "claim": "能亲自运行和验证软件是 Agent 工作流程中重要的能力，但不等于已证明代码质量",
+      "priority": "core",
+      "kind": "thesis",
+      "sourceAnchors": [
+        "P09"
+      ],
+      "disposition": "included",
+      "reportRefs": [
+        {
+          "type": "node",
+          "id": "Q2.1"
+        }
+      ],
+      "omitReason": ""
+    },
+    {
+      "id": "K03",
+      "segmentIds": [
+        "S02"
+      ],
+      "claim": "Feature Map 帮助 Agent 找到功能入口，解决能操作但找不到位置的问题",
+      "priority": "major",
+      "kind": "method",
+      "sourceAnchors": [
+        "P12"
+      ],
+      "disposition": "included",
+      "reportRefs": [
+        {
+          "type": "node",
+          "id": "Q2.2"
+        }
+      ],
+      "omitReason": ""
+    },
+    {
+      "id": "K04",
+      "segmentIds": [
+        "S03"
+      ],
+      "claim": "作者建议把 Skill 的失败案例做成 eval，并通过多实例测试持续检查",
+      "priority": "major",
+      "kind": "method",
+      "sourceAnchors": [
+        "P17"
+      ],
+      "disposition": "included",
+      "reportRefs": [
+        {
+          "type": "node",
+          "id": "Q3.3"
+        }
+      ],
+      "omitReason": ""
+    },
+    {
+      "id": "K05",
+      "segmentIds": [
+        "S04"
+      ],
+      "claim": "通过代码库架构、静态检查及 CI 等硬约束减少软提示无法阻止的错误",
+      "priority": "major",
+      "kind": "method",
+      "sourceAnchors": [
+        "P30"
+      ],
+      "disposition": "included",
+      "reportRefs": [
+        {
+          "type": "node",
+          "id": "Q4.4"
+        }
+      ],
+      "omitReason": ""
+    },
+    {
+      "id": "K06",
+      "segmentIds": [
+        "S05"
+      ],
+      "claim": "作者承认拥有充足 token 的环境，不等于普通团队都适用",
+      "priority": "major",
+      "kind": "limitation",
+      "sourceAnchors": [
+        "P28"
+      ],
+      "disposition": "included",
+      "reportRefs": [
+        {
+          "type": "node",
+          "id": "Q5.1"
+        }
+      ],
+      "omitReason": ""
+    }
+  ]
+}
