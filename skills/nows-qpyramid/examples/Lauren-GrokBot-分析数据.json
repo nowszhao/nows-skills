@@ -1,0 +1,1019 @@
+{
+  "meta": {
+    "title": "Agent 写完代码，什么情况下才能放心交给它？",
+    "summary": "Lauren Tan 认为，比起一遍遍盯着 Agent 改代码，更值得投入的是让它自己运行应用、检查结果，并把常犯的错误写成 CI 和架构约束。她举了 Feature Map、性能排查和代码库改造的例子，但这份材料还没有回答：怎样证明验证没有漏掉关键场景？",
+    "contentScope": "依据你上传的分析报告：31 个问题、12 条关系、30 段原文摘录。这里没有重新听完整视频。",
+    "analysisBasis": "根据上传的 Lauren / GrokBot 分析 HTML 整理；未重新观看视频，也未核验原报告关于公司、发布日期和 PR 的外部核验结论。",
+    "sourceLabel": "用户提供的 Lauren_Tan_GrokBot_知识驾驶舱.html · 原文件标注来源为 Lauren Tan / GrokBot 相关 YouTube 视频（来源和外部核验陈述未在本次重核）",
+    "display": {
+      "eyebrow": "LAUREN TAN / GROKBOT",
+      "heroLead": "Agent 写完代码，",
+      "heroHighlight": "怎么才敢放手？",
+      "heroIntro": "Lauren Tan 讲了几种具体做法：让 Agent 亲自运行和检查软件，用 Feature Map 找功能入口，把常见错误交给 CI。先看这些办法，再看她的理由和还没讲清的地方。",
+      "authorLabel": "Lauren Tan",
+      "topicLabel": "工程实践",
+      "thesisLead": "要放心让 Agent 写代码，",
+      "thesisHighlight": "先让它学会自己检查，再让 CI 挡住常犯的错。",
+      "thesisCaveat": "这是一种工程做法，效果还要靠数据验证。",
+      "thesisAttribution": "根据所读材料归纳，并非讲者逐字原话。",
+      "insightsHeading": "这段分享里值得记下的三点",
+      "mapHeading": "她怎么一步步讲这个问题",
+      "mapDescription": "全部问题始终展开。点击节点查看回答与依据；可拖动或缩放导图。",
+      "gapsHeading": "看完以后，我还想问这些",
+      "gapsDescription": "这些问题关系到能不能把她的方法用在实际项目里。",
+      "gapsDisclaimer": "下面的判断只针对你上传的分析报告，不代表完整视频一定没有回答。展开后可以看到材料说了什么、还少什么，以及可以怎么继续查。",
+      "sourceNotice": "这里只保存了部分原文摘录，不是完整视频字幕。",
+      "principles": [
+        {
+          "title": "亲自试",
+          "description": "让 Agent 运行应用、检查改动",
+          "relatedNode": "Q2.1"
+        },
+        {
+          "title": "知道去哪查",
+          "description": "Feature Map 指明功能入口",
+          "relatedNode": "Q2.2"
+        },
+        {
+          "title": "提前拦错",
+          "description": "尽量让 CI 挡住可机械检查的错误",
+          "relatedNode": "Q4.4"
+        },
+        {
+          "title": "反复测",
+          "description": "用 eval 看 Skill 是否真有用",
+          "relatedNode": "Q3.3"
+        }
+      ]
+    },
+    "contentRetelling": "Lauren Tan 认为，Agent 会写代码还不够，关键是工程师能否放心放手。她曾把性能截图交给 Agent 猜原因，结果常常猜错，于是给它补上运行应用、操作界面、抓取性能数据的工具，并用 Feature Map 告诉它功能入口。为了减少反复 Review，她把能机械检查的要求写进架构、lint 和 CI；遇到新的失败模式，就补 Skill，再用 eval 检查效果。她还介绍了通过云端 Agent 批量处理任务、让非工程同事提交 PR 的尝试。不过，许多成果仍是自述，报告没有提供足够的质量指标，也没有解释如何判断验证覆盖已经足够全面。普通团队是否划算，还得算清成本。"
+  },
+  "nodes": [
+    {
+      "id": "Q0",
+      "parent": null,
+      "kind": "root",
+      "question": "Agent 能写代码，怎样才能放心让它自己干活？",
+      "answer": "Lauren Tan 的办法是先把工作环境改好。给 Agent 工具，让它能打开应用、操作界面、查看运行结果；再把目录边界、导入规则、lint、CI 等要求写进代码库。这样人就不必每次都从头检查。",
+      "argument": "如果每个 Agent 的改动都要工程师亲自运行和确认，人就很难同时带多个 Agent。她想把可以重复的检查交给工具，把不能违反的规则交给架构和 CI。",
+      "evidence": [
+        "P01",
+        "P02",
+        "P09"
+      ],
+      "type": "综合归纳",
+      "consensus": "待外部核验",
+      "novelty": "综合框架",
+      "strength": "中：有真实产品与落地物证（feature map 抽帧、pstack 开源），但没有对照数据",
+      "limits": "这是一位工程师的经验。材料没有拿出质量对照数据，也没有说明这套做法怎样覆盖后端、数据管道等不容易靠界面操作验证的系统。",
+      "answerStatus": "partial",
+      "sufficiencyReason": "宏观框架交代了信任与环境的关系，但未证明完整验证的充分性、质量阈值和可移植性。"
+    },
+    {
+      "id": "Q1",
+      "parent": "Q0",
+      "question": "为什么她说，真正卡住并行开发的是信任？",
+      "answer": "因为不放心时，人必须挨个查看 Agent 的工作。Agent 可以同时启动很多个，工程师的注意力却没法同时分给它们。",
+      "argument": "她把这种状态比作经理事事盯着下属。Agent 写完以后，人还要打开应用、找错误、反馈截图、等它修改；任务一多，人先忙不过来。",
+      "evidence": [
+        "P03",
+        "P04"
+      ],
+      "type": "作者明确断言",
+      "consensus": "待外部核验",
+      "novelty": "一般论点",
+      "strength": "中：机制解释清楚，但无量化证据",
+      "limits": "这个判断适合重复检查很多的场景。涉及高风险操作时，人工审核可能是必要要求，不能一概看成效率低。",
+      "answerStatus": "partial",
+      "sufficiencyReason": "材料已给出局部答案，但仍有条件、证据、操作步骤或适用边界没有完全展开。"
+    },
+    {
+      "id": "Q1.1",
+      "parent": "Q1",
+      "question": "不放心 Agent 时，工程师每天会在忙什么？",
+      "answer": "Agent 写一版，人打开本地应用查看；发现有问题，再把截图或控制台错误发回去让它改。下一轮还得自己检查。",
+      "argument": "验证一直卡在人的手上，Agent 就算能并行生成代码，也得排队等人确认。",
+      "evidence": [
+        "P03",
+        "P04"
+      ],
+      "type": "作者明确断言",
+      "consensus": "待外部核验",
+      "novelty": "一般论点",
+      "strength": "中：经验 + 管理类比",
+      "limits": "这是讲者描述的工作方式，不等于每个团队都如此。",
+      "answerStatus": "full",
+      "sufficiencyReason": "在这份分析文本中，这个较窄的描述性问题已得到相对明确的直接回答；“充分”不代表独立事实验证。"
+    },
+    {
+      "id": "Q1.2",
+      "parent": "Q1",
+      "question": "她的“信任曲线”想说明什么？",
+      "answer": "她画的曲线从同时带 1 个 Agent 开始，依次标了 1–5、5–10、10–20，再到几百、几千个。她自己也说这张图“不太科学”。她自述上个月提交了约 1,000 个 PR，本月到 12 号已接近 800 个，还有一天早上醒来发现 20 个 PR 已自动合并。",
+      "argument": "她想表达的是：越能放心交给 Agent 做事，自己就越能同时推进多个任务。不过这些数字来自她个人的描述。",
+      "evidence": [
+        "P05",
+        "P06"
+      ],
+      "type": "事实（自述）",
+      "consensus": "未独立核验",
+      "novelty": "具体新信息",
+      "strength": "弱：只有自述与贡献图，没有可审计的 repo 或 PR 列表",
+      "limits": "没有可独立审计的 PR 列表，也没有回滚、事故和缺陷数据。PR 多不等于质量好。",
+      "answerStatus": "full",
+      "sufficiencyReason": "在这份分析文本中，这个较窄的描述性问题已得到相对明确的直接回答；“充分”不代表独立事实验证。"
+    },
+    {
+      "id": "Q1.3",
+      "parent": "Q1",
+      "question": "能不能直接启动几百个云端 Agent？",
+      "answer": "她不建议。还没建立起可靠的检查方式就直接放大并行量，可能只是更快地花掉大量 token。",
+      "argument": "在她的经验里，先确认一两个 Agent 能把活干对，再逐步扩大，比一开始开几百个更稳妥。",
+      "evidence": [
+        "P07"
+      ],
+      "type": "作者建议",
+      "consensus": "待外部核验",
+      "novelty": "一般论点",
+      "strength": "弱：只有断言，没有「跳过之后亏了多少」的案例",
+      "limits": "她没有提供并发规模与成本的对照实验；其他团队是否能复用同一套技能，材料中也没讲透。",
+      "answerStatus": "assertion",
+      "sufficiencyReason": "材料主要提供作者判断或自述，缺少能够独立验证该主张的关键指标或比较。"
+    },
+    {
+      "id": "Q1.4",
+      "parent": "Q1",
+      "question": "一千个 PR，代码质量真的过关吗？",
+      "answer": "她自己提过这个质疑，也承认问得合理；但在现有摘录里，没有看到缺陷率、回滚率或生产事故等质量数据。",
+      "argument": "她把回答转回“先把环境配置好”。这个方向值得研究，但还不能用 PR 数量来证明代码可靠。",
+      "evidence": [
+        "P08"
+      ],
+      "type": "作者明确断言",
+      "consensus": "待外部核验",
+      "novelty": "一般论点",
+      "strength": "缺失：对全片最关键的质疑没有给出证据",
+      "limits": "目前只能确认她提出了产量数字和工程做法，不能确认质量结果。",
+      "answerStatus": "assertion",
+      "sufficiencyReason": "正面提及代码可能是 slop，但没有给出事故率、回滚率、功能正确率等质量指标。"
+    },
+    {
+      "id": "Q2",
+      "parent": "Q0",
+      "question": "她靠什么让 Agent 的结果更可信？",
+      "answer": "两样东西要一起用：一套能实际操作和检查应用的工具，以及一份按用户使用路径写的 Feature Map。前者让 Agent 能动手验证，后者告诉它该去哪里验证。",
+      "argument": "只有工具，Agent 可能连功能入口都找不到；只有文档，它仍然没法运行应用、看到错误。两者配合，才有机会自己发现和修复问题。",
+      "evidence": [
+        "P09",
+        "P11",
+        "P12"
+      ],
+      "type": "作者明确断言",
+      "consensus": "部分外部支持",
+      "novelty": "差异化",
+      "strength": "中：有落地物证（抽帧可见 features/ 目录与 22 份按用户视角写的 md）",
+      "limits": "能操作界面不代表测得全面。性能、权限、安全和复杂业务逻辑仍需要专门的测试方法。",
+      "answerStatus": "partial",
+      "sufficiencyReason": "介绍了验证通道与 feature map 的作用，但不能从“有工具能操作”推论“验证充分、可以无人监督放行”。"
+    },
+    {
+      "id": "Q2.1",
+      "parent": "Q2",
+      "question": "她为什么把“会验证”排在 Prompt 技巧前面？",
+      "answer": "她希望 Agent 不只写代码，还能自己运行应用、操作界面、抓 CPU trace、查看堆快照，必要时打开 iOS 模拟器。写完以后，它得有办法看见自己的修改到底有没有起作用。",
+      "argument": "她举过一个反例：以前只能把性能截图发给 Agent，Agent 看图猜原因，猜错后还得人再跑一轮。能直接观察软件运行，可以减少这种来回猜测。",
+      "evidence": [
+        "P09",
+        "P10"
+      ],
+      "type": "作者明确断言",
+      "consensus": "部分外部支持（pstack 确有 create-verification-skill 与 control-* 系列）",
+      "novelty": "差异化",
+      "strength": "中：机制可信 + 落地物证，缺对照数据",
+      "limits": "她也明确区分了“代码正确”和“代码好不好”。材料没有说明怎样生成足够全面的测试清单，也没给出验证通过后的放行标准。",
+      "answerStatus": "partial",
+      "sufficiencyReason": "说明了为什么 verification 重要及部分能力示例，却未定义覆盖范围、测试质量及放行标准。"
+    },
+    {
+      "id": "Q2.2",
+      "parent": "Q2",
+      "question": "Feature Map 到底帮 Agent 解决了什么麻烦？",
+      "answer": "它告诉 Agent：一个功能在哪里、用户怎么进入、有哪些快捷键、界面元素怎么定位。比如有人说“右侧 PR 标签坏了”，Agent 至少知道先打开哪里，而不是到处乱找。",
+      "argument": "她展示的是从用户操作角度写的功能说明，而不只是代码目录。这样 Agent 在动手验证前就有了导航。",
+      "evidence": [
+        "P11",
+        "P12"
+      ],
+      "type": "作者明确断言",
+      "consensus": "部分外部支持",
+      "novelty": "差异化",
+      "strength": "中：抽帧实证最强——features/README.md 写明「讲怎么用它，不是它内部怎么实现」，并列出登录/构建等基线前提与 ARIA、data-* 选择器约定",
+      "limits": "Feature Map 需要跟着界面更新。文档过期，Agent 反而可能按照错误路线操作。",
+      "answerStatus": "full",
+      "sufficiencyReason": "对 feature map 的用途、基本内容和失效风险交代得较完整；只是没有提供完整实施配置，不能据此做端到端验证。"
+    },
+    {
+      "id": "Q2.3",
+      "parent": "Q2",
+      "question": "没有这些验证工具，她碰到过什么问题？",
+      "answer": "她讲到入职第一周处理性能问题时，自己打开 DevTools，看不懂 flame graph，就把截图发给 Agent。Agent 很确定地指了一个原因，改完才发现判断错了。",
+      "argument": "Agent 没有亲自运行和检查程序，只能凭截图推测。人既要提供材料，又要验证它的猜测。",
+      "evidence": [
+        "P10"
+      ],
+      "type": "个人经验",
+      "consensus": "待外部核验",
+      "novelty": "个人经验或立场",
+      "strength": "弱-中：单个案例足以说明这种失败模式存在，不足以证明它是所有人的主要瓶颈",
+      "limits": "这是一个亲身案例。它说明这种错误可能发生，但不能证明所有性能问题都该用同一套方法处理。",
+      "answerStatus": "full",
+      "sufficiencyReason": "在这份分析文本中，这个较窄的描述性问题已得到相对明确的直接回答；“充分”不代表独立事实验证。"
+    },
+    {
+      "id": "Q2.4",
+      "parent": "Q2",
+      "question": "这些工具怎样让整个团队受益？",
+      "answer": "把工具和操作知识放进共享的云端环境后，不同 Agent 可以使用同一套能力。她举了内部 Agent Benny：它收到 bug report 后，会在自己的云端电脑上运行 Cursor，尝试复现问题。",
+      "argument": "以前是一个工程师在本地摸索怎样验证；现在可以把验证能力放到环境中，供多个 Agent 使用。",
+      "evidence": [
+        "P13",
+        "P14"
+      ],
+      "type": "作者明确断言",
+      "consensus": "待外部核验",
+      "novelty": "差异化",
+      "strength": "中：机制合理、案例真实，无量化收益",
+      "limits": "这个案例没有给出节省多少人时、失败多少次、花费多少 token 等数字。",
+      "answerStatus": "partial",
+      "sufficiencyReason": "说明了云端复制同一组能力的设想与案例，但规模成本、故障隔离和质量稳定性没有证明。"
+    },
+    {
+      "id": "Q3",
+      "parent": "Q0",
+      "question": "Skill 应该从哪里来？写完以后怎么维护？",
+      "answer": "她会检查 Agent 为什么失败，再把反复出现的问题写成 Skill。写完不是结束，还要用 eval 测它是否真的改变了行为。她说 pstack 就是这样一点点积累出来的。",
+      "argument": "先看真实失败，再补规则；之后用测试检查规则有没有用。比先写一本全面规范更接近她的日常做法。",
+      "evidence": [
+        "P15",
+        "P16",
+        "P17"
+      ],
+      "type": "作者建议",
+      "consensus": "部分外部支持",
+      "novelty": "差异化",
+      "strength": "中",
+      "limits": "这需要有人愿意看 Agent 的实际操作记录，也需要投入成本维护测试。",
+      "answerStatus": "partial",
+      "sufficiencyReason": "材料已给出局部答案，但仍有条件、证据、操作步骤或适用边界没有完全展开。"
+    },
+    {
+      "id": "Q3.1",
+      "parent": "Q3",
+      "question": "pstack 是什么？名字从哪来的？",
+      "answer": "她说 Garry Tan 做了 gstack，她也姓 Tan，但两人没有亲属关系，于是做了 pstack 开玩笑；其中 P 来自她的网名 potato（@poteto）。她强调 pstack 并非事先规划的大项目，而是从 control-glass、how 等 Skill 慢慢积累起来的。",
+      "argument": "这部分主要是工具来源和个人经历，不是对工具效果的证明。",
+      "evidence": [
+        "P15"
+      ],
+      "type": "事实",
+      "consensus": "已核验共识（就「存在与形态」而言）",
+      "novelty": "具体新信息",
+      "strength": "强：gstack 与 pstack 均可外部查证",
+      "limits": "pstack 和 gstack 的存在可以查证；名字的来历来自她本人讲述。",
+      "answerStatus": "full",
+      "sufficiencyReason": "在这份分析文本中，这个较窄的描述性问题已得到相对明确的直接回答；“充分”不代表独立事实验证。"
+    },
+    {
+      "id": "Q3.2",
+      "parent": "Q3",
+      "question": "不知道该写什么 Skill，先看哪里？",
+      "answer": "先翻 Agent 的 tool call 记录。她曾发现 Agent 根本没读相关代码，却很自信地给出判断。此后，类似“别凭空猜，先搜代码”这样的要求才逐渐被写成 Skill。",
+      "argument": "规则从具体失败中来，才知道它要防什么。观察到新的失败，再补新的规则。",
+      "evidence": [
+        "P16"
+      ],
+      "type": "作者建议",
+      "consensus": "部分外部支持",
+      "novelty": "差异化",
+      "strength": "中",
+      "limits": "检查操作轨迹本身要花时间。单靠写规则，也不能保证 Agent 每次都会遵守。",
+      "answerStatus": "full",
+      "sufficiencyReason": "在这份分析文本中，这个较窄的描述性问题已得到相对明确的直接回答；“充分”不代表独立事实验证。"
+    },
+    {
+      "id": "Q3.3",
+      "parent": "Q3",
+      "question": "怎么知道一个 Skill 真的有用？",
+      "answer": "她把 eval 当作 Agent 的单元测试：先写评分规则，再让多个子 Agent 在独立目录中做任务，目录名还会刻意避开“这是评测”的提示。之后跨模型比较结果，反复改 Skill，甚至把分数做到 10/10。",
+      "argument": "如果只凭手感，分不清是 Skill 起作用，还是模型、任务或运气在变化。她希望用重复测试来比较。",
+      "evidence": [
+        "P17",
+        "P18",
+        "P19"
+      ],
+      "type": "作者建议",
+      "consensus": "部分外部支持（pstack 确有 eval playbook）",
+      "novelty": "差异化",
+      "strength": "中：机制完整，但评分机制与「agent 会察觉被评测」的论断只有直觉没有实验",
+      "limits": "在同一套题目上反复优化，可能把分数刷高，却没提升实际表现。现有材料没有给出独立盲测或长期生产验证。",
+      "answerStatus": "partial",
+      "sufficiencyReason": "给出了 skill eval 的组织方式（rubric、多模型、多子 agent），但缺测试集覆盖与 judge 有效性的实证。"
+    },
+    {
+      "id": "Q3.4",
+      "parent": "Q3",
+      "question": "几段 Markdown 为什么可能影响 Agent 的表现？",
+      "answer": "她把 Agent 比作能力很强、但刚入职且不了解业务的工程师。Skill 是一份上手说明：告诉它该看什么、哪些错误要避开、碰到问题怎么查。",
+      "argument": "给 Agent 更贴近任务的上下文，可能比让它自己摸索更有效。她还用了 latent space 的说法来解释，但那更像比喻。",
+      "evidence": [
+        "P16"
+      ],
+      "type": "定义/框架",
+      "consensus": "待外部核验",
+      "novelty": "一般论点",
+      "strength": "弱：latent space 是比喻而非严格术语，且无法证伪",
+      "limits": "这不是所有 Skill 都有效的证据。是否真的有用，仍要回到具体任务和评估结果。",
+      "answerStatus": "partial",
+      "sufficiencyReason": "材料已给出局部答案，但仍有条件、证据、操作步骤或适用边界没有完全展开。"
+    },
+    {
+      "id": "Q4",
+      "parent": "Q0",
+      "question": "人不逐行看代码，怎样挡住明显的错误？",
+      "answer": "她的做法是尽量让错误在构建或检查阶段就被拦下。她给出的顺序是：代码库架构、静态分析与 CI、rules / bugbot、Skill，最后是 style guide。",
+      "argument": "如果某条规则必须遵守，就尽量写成编译器或 CI 能执行的检查，不要只放在文档里等 Agent 自觉记住。",
+      "evidence": [
+        "P23",
+        "P25",
+        "P26",
+        "P30"
+      ],
+      "type": "作者建议",
+      "consensus": "待外部核验（体系不开源）",
+      "novelty": "差异化",
+      "strength": "中：有真实体系与抽帧清单佐证，但排序本身是工程判断而非测量结果",
+      "limits": "CI 只能检查被写成规则的事情。架构设计、业务判断、代码可维护性等问题仍有人工判断空间。",
+      "answerStatus": "partial",
+      "sufficiencyReason": "给出了架构/静态约束等原则，但“人不看代码就能维护质量”的系统性验证数据仍缺失。"
+    },
+    {
+      "id": "Q4.1",
+      "parent": "Q4",
+      "question": "有了 Agent，重写旧系统就更划算吗？",
+      "answer": "她认为可以重新讨论重写的成本，但没有说“应该全部重写”。她把重点放在另一件事上：现有代码库到底有没有足够的工程限制。",
+      "argument": "Agent 降低了编写代码的部分成本；可如果缺少约束，重写出来的系统也可能变得难以维护。",
+      "evidence": [
+        "P20"
+      ],
+      "type": "评价/价值判断",
+      "consensus": "待外部核验",
+      "novelty": "一般论点",
+      "strength": "中：她自己在同一段里承认「取决于情况」，所以这不是无条件主张",
+      "limits": "没有给出重写前后的成本、质量或维护数据，不能据此替任何团队做重写决策。",
+      "answerStatus": "partial",
+      "sufficiencyReason": "材料已给出局部答案，但仍有条件、证据、操作步骤或适用边界没有完全展开。"
+    },
+    {
+      "id": "Q4.2",
+      "parent": "Q4",
+      "question": "新项目为什么可能比老系统更难管？",
+      "answer": "她特别担心没有护栏、靠 vibe coding 快速搭起来的新项目。成熟的大型代码库往往已有框架、目录规则和权限限制；新项目没有这些约束时，Agent 容易挑眼前最省事的写法。",
+      "argument": "她拿 GrokBot 的早期原型举例：项目起步时缺少约束，后来要用 600 多个 PR 迁到 Dune 架构。",
+      "evidence": [
+        "P20",
+        "P21",
+        "P22"
+      ],
+      "type": "解释/因果",
+      "consensus": "作者单方主张（多家二手报道复述，但同源）",
+      "novelty": "差异化",
+      "strength": "中：论证结构清晰、案例真实，样本量为 1",
+      "limits": "她比较的是“有成熟护栏的旧系统”和“没护栏的新原型”。那些既有历史包袱、又缺少工程约束的老系统，材料没有给出答案。",
+      "answerStatus": "partial",
+      "sufficiencyReason": "材料已给出局部答案，但仍有条件、证据、操作步骤或适用边界没有完全展开。"
+    },
+    {
+      "id": "Q4.3",
+      "parent": "Q4",
+      "question": "Dune 具体限制了什么？为什么这么做？",
+      "answer": "她把 Dune 形容为面向 Electron 应用、方便 Agent 编码的一套架构。两项比较激进的规定是禁用 useEffect（CI 直接报错）和代码注释。她说自己看到的 Agent 注释约 99% 只是在复述旧背景，与眼前代码没什么关系。这个“99%”是她的说法，不是这里独立测得的数据。",
+      "argument": "她宁愿让 CI 直接报错，也不愿只在 style guide 里写“请尽量避免”。",
+      "evidence": [
+        "P23",
+        "P24"
+      ],
+      "type": "作者建议",
+      "consensus": "作者单方主张",
+      "novelty": "差异化（疑似反常识，待核验）",
+      "strength": "弱：禁令确实落地（CI 会红），但「99%」与「禁令后质量提升」都无数据",
+      "limits": "“99% 的注释没用”是她的经验判断，现有材料没有测量依据。直接照搬这两项禁令，也可能伤害其他团队的可维护性。",
+      "answerStatus": "assertion",
+      "sufficiencyReason": "材料主要提供作者判断或自述，缺少能够独立验证该主张的关键指标或比较。"
+    },
+    {
+      "id": "Q4.4",
+      "parent": "Q4",
+      "question": "哪些规则最能约束 Agent？",
+      "answer": "她展示的排序是：① 代码库架构；② lint、编译器、CI；③ rules、bugbot；④ Skill；⑤ style guide。她尤其看重那些能让构建失败的检查。",
+      "argument": "写进文档的建议可能被忽略；写进编译器或 CI 的要求，只要检查运行，就会得到明确结果。",
+      "evidence": [
+        "P30",
+        "P25",
+        "P26"
+      ],
+      "type": "定义/框架",
+      "consensus": "待外部核验",
+      "novelty": "差异化",
+      "strength": "中：抽帧核对到原清单，但排序是她的工程判断",
+      "limits": "这是一套工程经验排序，不是经过对照实验的客观排名。架构本身也可能设计得不好。",
+      "answerStatus": "partial",
+      "sufficiencyReason": "给出约束层次和硬失败判据；对如何验证业务逻辑、端到端结果仍解释不足。"
+    },
+    {
+      "id": "Q4.5",
+      "parent": "Q4",
+      "question": "为什么她拿 Rust 编译器举例？",
+      "answer": "Rust 的类型和所有权检查能在编译阶段挡住一类错误。她认为，Agent 写代码时，这种可执行的限制比口头提醒更有用。",
+      "argument": "让编译器先做它擅长的检查，就能少靠人手动找同类错误。",
+      "evidence": [
+        "P26"
+      ],
+      "type": "作者建议",
+      "consensus": "主流但有争议",
+      "novelty": "一般论点",
+      "strength": "弱：她本人用了「more or less feel somewhat confident」的措辞",
+      "limits": "编译通过不能证明业务逻辑正确。她说的是“大致更有信心”，不是完全无需审核。",
+      "answerStatus": "assertion",
+      "sufficiencyReason": "材料主要提供作者判断或自述，缺少能够独立验证该主张的关键指标或比较。"
+    },
+    {
+      "id": "Q4.6",
+      "parent": "Q4",
+      "question": "人工 Review 发现的问题，能不能下次自动拦住？",
+      "answer": "她建议每次有人在 PR 里反复指出同类问题，都问一句：能不能把它写成 lint 规则、CI 检查，或在架构上直接避免？",
+      "argument": "一条人肉重复检查的意见，如果能够机械化，就不该每次都从头靠人发现。",
+      "evidence": [
+        "P27"
+      ],
+      "type": "作者建议",
+      "consensus": "待外部核验",
+      "novelty": "差异化",
+      "strength": "中：可迁移性最强的操作规则，但成立前提是「意见可机械化」",
+      "limits": "代码风格之外还有设计取舍、命名和抽象边界。这些意见未必适合一刀切写成 CI 规则。",
+      "answerStatus": "partial",
+      "sufficiencyReason": "材料已给出局部答案，但仍有条件、证据、操作步骤或适用边界没有完全展开。"
+    },
+    {
+      "id": "Q4.7",
+      "parent": "Q4",
+      "question": "PR 需要严格限制行数吗？",
+      "answer": "她没有设硬上限，从几十行到上千行的 PR 都有。她更愿意让 Agent 把大改动拆开，留下清楚的 Git 历史，方便回滚和追查问题。",
+      "argument": "改动切得清楚，出错时更容易定位是哪一步引入的。",
+      "evidence": [
+        "P06"
+      ],
+      "type": "作者建议",
+      "consensus": "待外部核验",
+      "novelty": "一般论点",
+      "strength": "弱-中：原则清楚，无数据支撑拆分带来的收益",
+      "limits": "更多小 PR 也会增加 CI 和审核压力。材料没有比较两种做法的成本。",
+      "answerStatus": "full",
+      "sufficiencyReason": "在这份分析文本中，这个较窄的描述性问题已得到相对明确的直接回答；“充分”不代表独立事实验证。"
+    },
+    {
+      "id": "Q4.8",
+      "parent": "Q4",
+      "question": "Agent Window 为什么会卡顿？",
+      "answer": "她说 Electron 的 main 和 renderer 没有隔离好，有些工作被意外带进 renderer，挤占渲染每帧大约 16ms 的时间，造成掉帧和卡顿。PR 合并得多，也会增加性能回归的机会。",
+      "argument": "如果没有架构层面的隔离，改动再小也可能把额外计算带到界面主线程。",
+      "evidence": [
+        "P22"
+      ],
+      "type": "解释/因果",
+      "consensus": "待外部核验",
+      "novelty": "个人经验或立场",
+      "strength": "中：根因解释具体可信，但无可测量的性能数据",
+      "limits": "她承认 Agent Window 当时还没有迁到 Dune。材料没有提供迁移后的实际性能数据。",
+      "answerStatus": "full",
+      "sufficiencyReason": "在这份分析文本中，这个较窄的描述性问题已得到相对明确的直接回答；“充分”不代表独立事实验证。"
+    },
+    {
+      "id": "Q5",
+      "parent": "Q0",
+      "question": "普通团队照着做，成本算得过来吗？",
+      "answer": "她承认自己在 token 近乎不限量的 AI 实验室工作，不能要求所有团队照搬。她建议算一笔账：请人继续做重复工作，还是花 token 把代码库改到更适合 Agent 工作？",
+      "argument": "如果 Agent 将来承担大量编码，前期投入工程约束可能会减少以后的人力检查。",
+      "evidence": [
+        "P28",
+        "P29"
+      ],
+      "type": "作者建议",
+      "consensus": "待外部核验",
+      "novelty": "一般论点",
+      "strength": "弱：只有方向，没有数字",
+      "limits": "目前没有成本明细、收益周期或不同规模团队的比较数据。",
+      "answerStatus": "partial",
+      "sufficiencyReason": "材料已给出局部答案，但仍有条件、证据、操作步骤或适用边界没有完全展开。"
+    },
+    {
+      "id": "Q5.1",
+      "parent": "Q5",
+      "question": "没有无限 token，还值得投入这些改造吗？",
+      "answer": "她把问题留给团队自己做 ROI 判断：前期花 token 改造代码库，能不能换来以后更少的人力投入？她认为在自己的场景里划算。",
+      "argument": "这笔投入是否值得，取决于 Agent 未来做多少工作、验证工具维护成本多高、失败时要付出什么代价。",
+      "evidence": [
+        "P28",
+        "P29"
+      ],
+      "type": "作者建议",
+      "consensus": "待外部核验",
+      "novelty": "一般论点",
+      "strength": "弱：没给 token 花销、人力成本或回收期",
+      "limits": "她没有公布具体的 token 花销、投入人力和回收期，也没有给普通团队的试点数据。",
+      "answerStatus": "assertion",
+      "sufficiencyReason": "给出 ROI 的思考方向，却缺少成本、时间和回收期等核算要素。"
+    },
+    {
+      "id": "Q5.2",
+      "parent": "Q5",
+      "question": "谁会从这套改造中受益？",
+      "answer": "她列举了三类人：她自己不用反复逐行检查；工程团队可以共用同一套限制；PM、设计师、GTM 等非工程角色也能尝试提交功能或修复。",
+      "argument": "工程约束和验证工具不再只存在于某个人的操作习惯里，其他人和 Agent 也能借用。",
+      "evidence": [
+        "P13"
+      ],
+      "type": "作者明确断言",
+      "consensus": "待外部核验",
+      "novelty": "一般论点",
+      "strength": "中：有 GrokBot 团队的实例，但产品刚发布一天",
+      "limits": "非工程角色参与 PR 的例子来自产品发布阶段，后续效果还没有长期数据。她还提到，自己以前独自建设并验证类似框架可能得花数年；这一成本估计同样来自她个人判断。",
+      "answerStatus": "partial",
+      "sufficiencyReason": "材料已给出局部答案，但仍有条件、证据、操作步骤或适用边界没有完全展开。"
+    },
+    {
+      "id": "Q6",
+      "parent": "Q0",
+      "question": "GrokBot 想让非工程同事做到什么？",
+      "answer": "她把 GrokBot 称作非技术用户的“Cursor moment”。界面像 iMessage，可以给 Agent 命名、分配任务。她说 PM 已经能直接修 bug、提交 PR。",
+      "argument": "让不熟悉 IDE、CLI 的同事也有一个比较容易上手的入口。",
+      "evidence": [
+        "P29"
+      ],
+      "type": "作者明确断言",
+      "consensus": "待外部核验",
+      "novelty": "具体新信息",
+      "strength": "弱：产品刚发布，样本是发布周演示",
+      "limits": "这是讲者介绍的使用场景，不能据此判断非技术同事长期提交代码的质量。",
+      "answerStatus": "partial",
+      "sufficiencyReason": "材料已给出局部答案，但仍有条件、证据、操作步骤或适用边界没有完全展开。"
+    },
+    {
+      "id": "Q6.1",
+      "parent": "Q6",
+      "question": "GrokBot 是什么样的产品？",
+      "answer": "这是她和团队做的 Agent 协作应用，界面像 iMessage，用户可以给多个 Agent 设置名字和分工。她提到项目最初是快速搭起来的原型，后来迁到 Dune 架构。",
+      "argument": "产品入口降低使用门槛；架构改造试图让 Agent 写出的代码更容易受控。",
+      "evidence": [
+        "P22"
+      ],
+      "type": "事实",
+      "consensus": "部分外部支持（Grok Bot 2026-08-11 进 beta）",
+      "novelty": "具体新信息",
+      "strength": "中",
+      "limits": "原分析材料记录了发布时间，但本次没有重新核验视频日期和正式发布状态。",
+      "answerStatus": "full",
+      "sufficiencyReason": "在这份分析文本中，这个较窄的描述性问题已得到相对明确的直接回答；“充分”不代表独立事实验证。"
+    },
+    {
+      "id": "Q6.2",
+      "parent": "Q6",
+      "question": "PM、设计师真的开始自己修 Bug 了吗？",
+      "answer": "按她的说法，PM、设计师和 GTM 已开始尝试。GrokBot 把入口做得更像聊天，不用先熟悉 IDE 或命令行。她提到一位 PM 修 bug 提 PR，她看了一眼觉得“完美”，就通过了。",
+      "argument": "相比 IDE 或命令行，聊天界面让非工程角色更容易发起 Agent 编码任务。",
+      "evidence": [
+        "P29"
+      ],
+      "type": "事实（自述）",
+      "consensus": "待外部核验",
+      "novelty": "具体新信息",
+      "strength": "弱",
+      "limits": "这是发布阶段的个人经验，没有长期使用率、质量或返工数据。",
+      "answerStatus": "assertion",
+      "sufficiencyReason": "作者表达了非工程角色能够使用的个人观察，缺乏可验证的长期效果数据。"
+    }
+  ],
+  "relations": [
+    {
+      "from": "Q1.1",
+      "to": "Q1",
+      "type": "support",
+      "label": "支持",
+      "why": "[00:01:45–00:02:04] 她用经理盯着下属的例子，解释为什么不放心就很难让多个 Agent 同时干活。"
+    },
+    {
+      "from": "Q2.1",
+      "to": "Q2",
+      "type": "support",
+      "label": "支持",
+      "why": "[00:05:43] 她直接说 verification 是最重要的技能之一，这也是她回答“怎样建立信任”的起点。"
+    },
+    {
+      "from": "Q2.2",
+      "to": "Q2.1",
+      "type": "premise",
+      "label": "前提",
+      "why": "[00:10:23–00:11:18] 她说只有操作工具还不够，Agent 不知道功能入口就会乱找，所以还需要 Feature Map。"
+    },
+    {
+      "from": "Q2.3",
+      "to": "Q2.1",
+      "type": "support",
+      "label": "支持",
+      "why": "[00:08:05–00:08:35] 她曾拿截图让 Agent 猜性能问题，结果猜错了。这是她想让 Agent 自己验证的原因之一。"
+    },
+    {
+      "from": "Q2.4",
+      "to": "Q2.2",
+      "type": "premise",
+      "label": "前提",
+      "why": "[00:25:56–00:27:07] Benny 在云端尝试复现 bug，依赖的是之前已经准备好的操作工具和功能导航。"
+    },
+    {
+      "from": "Q3.3",
+      "to": "Q3.2",
+      "type": "support",
+      "label": "支持",
+      "why": "[00:17:45–00:22:39] 她用 eval 检查写出来的 Skill 有没有改善 Agent 的表现。"
+    },
+    {
+      "from": "Q4.2",
+      "to": "Q4.1",
+      "type": "conflict",
+      "label": "限定",
+      "why": "[00:31:06–00:32:34] 她谈重写时更在意代码库有没有护栏，并没有给出“都应该重写”的结论。"
+    },
+    {
+      "from": "Q4.3",
+      "to": "Q4.2",
+      "type": "support",
+      "label": "支持",
+      "why": "[00:33:42–00:35:05] 她用 GrokBot 早期缺乏约束、后来迁到 Dune 的经历，说明新项目也会积累难管的代码。"
+    },
+    {
+      "from": "Q4.4",
+      "to": "Q4.3",
+      "type": "premise",
+      "label": "前提",
+      "why": "[00:43:19–00:47:15] 这套约束排序解释了为什么有些要求她宁愿写成 CI 报错，也不只留在文档里。"
+    },
+    {
+      "from": "Q4.5",
+      "to": "Q4.4",
+      "type": "support",
+      "label": "支持",
+      "why": "[00:46:58–00:47:29] 她拿 Rust 的编译检查举例，说明哪些错误可以提前交给工具发现。"
+    },
+    {
+      "from": "Q4.4",
+      "to": "Q4.6",
+      "type": "support",
+      "label": "支持",
+      "why": "[00:47:48–00:48:23] 既然工具能重复检查，就可以把一部分常见 Review 意见写成规则。"
+    },
+    {
+      "from": "Q5.1",
+      "to": "Q1.3",
+      "type": "conflict",
+      "label": "限定",
+      "why": "[00:28:32] 她不赞成一开始就开上千个 Agent；[00:53:36] 同时又认为投入 token 改造环境可能划算。两点并不必然冲突，但材料没有给出可操作的投入界线。"
+    }
+  ],
+  "paragraphs": [
+    {
+      "id": "P01",
+      "text": "[00:00:00] “how would I make it so my agents could just automatically fix bugs for me while I sleep?”——她做持久化 bot 与 GrokBot 的起点动机。"
+    },
+    {
+      "id": "P02",
+      "text": "[00:00:52] “the big theme for me … is how do you trust it?”——整场主题只有这一个问题。"
+    },
+    {
+      "id": "P03",
+      "text": "[00:01:27] “when you don't have much trust in your agents, I feel like you really can't get the most out of them.”"
+    },
+    {
+      "id": "P04",
+      "text": "[00:08:35] “you are the verifier. All right, you're the bottleneck.”——没有验证技能时，人就是那台串行验证机。"
+    },
+    {
+      "id": "P05",
+      "text": "[00:02:04–00:04:04 画面] 自绘曲线，横轴 “number of agents”（1 / 1 to 5 / 5 to 10 / 10 to 20 / hundreds / thousands），纵轴未标注；她自承认 「not very scientific」。"
+    },
+    {
+      "id": "P06",
+      "text": "[00:05:02] “last month, I shipped 1,000 PRs, which is ridiculous … this month, we're only on the 12th, I'm already at like almost 800 PRs landed.”"
+    },
+    {
+      "id": "P07",
+      "text": "[00:27:21] “you don't want to jump to like, I'm going to spawn a hundred … or a thousand of cloud agents right now, because you're just going to waste a lot of tokens.”"
+    },
+    {
+      "id": "P08",
+      "text": "[00:05:02] “a lot of you will definitely be questioning like how much of this code is actually good … that's definitely fair to question.”（提问之后未给质量指标）"
+    },
+    {
+      "id": "P09",
+      "text": "[00:05:43–00:06:28] “the most important skill you should have in your toolbox when you work with agents is verification … It doesn't guarantee your agent writes good code, but it allows them to at least write correct code.”"
+    },
+    {
+      "id": "P10",
+      "text": "[00:08:05] “I would take a screenshot … and it would confidently state it's this thing. And then I'd try to fix that. And it turns out that's not the actual thing.”"
+    },
+    {
+      "id": "P11",
+      "text": "[00:10:23] “it had no idea what the agent's window was … the agent would just be flailing around.”"
+    },
+    {
+      "id": "P12",
+      "text": "[00:12:47] “with a feature map like this, it has a lot more context and understanding of how to actually navigate.”"
+    },
+    {
+      "id": "P13",
+      "text": "[00:25:20] “these verification skills pay a huge amount of dividend … it actually levels up your whole team, and even your whole company.”"
+    },
+    {
+      "id": "P14",
+      "text": "[00:26:15] “Benny … takes all of the bug reports that we get and it automatically goes off in the cloud … it runs cursor in its own computer.”"
+    },
+    {
+      "id": "P15",
+      "text": "[00:13:40–00:14:40] “Garry Tan, who is the CEO of Y Combinator … came up with this plugin called Gstack … I thought it'd be funny to make Pstack my version of his plugin.”"
+    },
+    {
+      "id": "P16",
+      "text": "[00:15:14] “when I looked at the actual tool calls, I noticed it wasn't actually reading the code … that made me just extremely suspicious.”"
+    },
+    {
+      "id": "P17",
+      "text": "[00:18:05] “an eval is essentially … the mental model I have is like it's a unit test for an agent.”"
+    },
+    {
+      "id": "P18",
+      "text": "[00:19:25] “it creates individual directories for them, cleverly named to not let the sub agent know that it's being evaluated.”"
+    },
+    {
+      "id": "P19",
+      "text": "[00:21:49] “you can hill climb them … keep looping on this eval until everything is 10 out of 10.”"
+    },
+    {
+      "id": "P20",
+      "text": "[00:31:24–00:32:00] “a lot of big tech company problems are now everybody's problems … before AI slop, we had human slop.”（自动转写把 slop 记作 sloth）"
+    },
+    {
+      "id": "P21",
+      "text": "[00:32:00] “you're catering to … the least capable engineer on your team … you restrict credentials so that your intern doesn't wipe your production database.”"
+    },
+    {
+      "id": "P22",
+      "text": "[00:33:42] “when you have a completely vibe coded application, you essentially have no guardrails whatsoever.”"
+    },
+    {
+      "id": "P23",
+      "text": "[00:39:23] “you can kind of think of it as like Next.js for Electron apps, and it's designed for agents to write.”——Dune 的心智模型。"
+    },
+    {
+      "id": "P24",
+      "text": "[00:40:01–00:40:56] “I actually banned code comments as well … 99% of the time agents just write code comments that kind of describe some historical thing that is actually totally irrelevant.”"
+    },
+    {
+      "id": "P25",
+      "text": "[00:45:03] “the shortest path is the best path … they'll find the quickest way to solve the problem. So why not make that the best way to solve the problem?”"
+    },
+    {
+      "id": "P26",
+      "text": "[00:46:24–00:47:29] “if you only have rules and bugbot and skills and a style guide for your code … it's only a matter of time before your code base looks like complete trash.”同一段后接 Rust/borrow checker 的例子。"
+    },
+    {
+      "id": "P27",
+      "text": "[00:47:48] “the worst place to be in is if you are stuck in code review land.”"
+    },
+    {
+      "id": "P28",
+      "text": "[00:49:21] “I work at an AI lab where we have unlimited tokens, so I definitely cannot say that this is something everyone should do.”"
+    },
+    {
+      "id": "P29",
+      "text": "[00:51:43] “do you hire someone to do this, or do you spend the tokens to set up a code base so that even the dumbest agents can do a good job?”"
+    },
+    {
+      "id": "P30",
+      "text": "[00:43:50 画面] 屏幕上的强制分层清单：1. codebase / 2. static analysis (lint/compiler/ci) / 3. rules·bugbot / 4. skills / 5. \"style guide\"。"
+    }
+  ],
+  "criticalGaps": [
+    {
+      "id": "G01",
+      "question": "怎样确认测试没漏掉关键场景？",
+      "category": "测试覆盖",
+      "origin": "reader_inferred",
+      "priority": "critical",
+      "answerStatus": "partial",
+      "sourceProvides": "她讲了 Agent 怎样操作界面、抓 CPU trace 和堆快照，还展示了 Feature Map，并强调用 CI 和架构挡住一部分错误。这些说明“能做检查”，但还没有说明“检查得够不够全”。",
+      "missing": [
+        "怎样从需求、用户操作路径和系统风险列出全部重点检查项",
+        "怎样逐项核对正常流程、异常、边界、权限、安全、性能和回归是否都有测试",
+        "怎样判断测试本身能发现错误，以及测试没覆盖到的部分由谁决定放行"
+      ],
+      "sufficiencyCriteria": [
+        "先定义必须正确的行为、不能破坏的约束和最严重的失败",
+        "给每项重要需求或风险找到对应测试，并能查看实际运行结果",
+        "列出未测到的地方和剩余风险，说明什么情况必须人工确认、灰度或回滚"
+      ],
+      "impact": "能运行测试不代表已覆盖关键风险。要让人放心，还需要知道哪些地方检查过、哪些没有。",
+      "nextSteps": "可以先做一张“需求或风险—测试场景—执行结果—证据”的对照表，再用故障注入或变异测试找漏项。这是补充建议，不是她在视频里的完整操作步骤。",
+      "basis": "只审阅了你上传的二次分析报告；不能据此断言完整视频完全没有谈到这一点。",
+      "relatedNodes": [
+        "Q0",
+        "Q2",
+        "Q2.1",
+        "Q2.2",
+        "Q4.4"
+      ],
+      "evidence": [
+        "P09",
+        "P11",
+        "P12",
+        "P30"
+      ]
+    },
+    {
+      "id": "G02",
+      "question": "真要落地，Agent 应该从哪一步开始验证？",
+      "category": "实施步骤",
+      "origin": "reader_inferred",
+      "priority": "critical",
+      "answerStatus": "partial",
+      "sourceProvides": "材料提到浏览器或应用控制、模拟器、性能分析、Feature Map、CI 和 Skill eval，但没有把这些东西串成一份能直接照做的流程。",
+      "missing": [
+        "从什么环境开始：工具、权限、账号和测试数据怎么准备",
+        "收到需求后，怎样写验收条件、设计测试、执行、判断失败、修复再复测",
+        "哪些截图、日志和结果必须留下，什么情况可以合并，什么情况要回退"
+      ],
+      "sufficiencyCriteria": [
+        "别人按说明能独立复现一个最小案例",
+        "每个步骤都有预期结果、实际结果和失败时的处理办法",
+        "能说明谁负责最终确认，尤其是风险较高的改动"
+      ],
+      "impact": "只知道工具名称，团队仍然不知道该怎么配环境、做检查和确认结果。",
+      "nextSteps": "挑一个真实 bug，先写清怎样算修好，再让 Agent 运行应用、保存证据、失败后重试，最后用 CI 检查是否达到要求。这是补充的试做路线，不是原视频逐步教学。",
+      "basis": "依据上传报告中提到的工具和案例判断；未逐帧复查原视频。",
+      "relatedNodes": [
+        "Q2.1",
+        "Q2.2",
+        "Q3.3",
+        "Q4.4"
+      ],
+      "evidence": [
+        "P09",
+        "P10",
+        "P11",
+        "P12",
+        "P17",
+        "P30"
+      ]
+    },
+    {
+      "id": "G03",
+      "question": "PR 数量这么高，怎么判断质量也过关？",
+      "category": "质量证据",
+      "origin": "reader_inferred",
+      "priority": "critical",
+      "answerStatus": "assertion",
+      "sourceProvides": "她说上个月大约提交了 1,000 个 PR，也主动承认“这些代码好不好”是个合理问题。但材料没有列出对应的质量指标。",
+      "missing": [
+        "明确期间内的缺陷、回滚、事故和漏检情况",
+        "与改造前或人工开发流程的可比较数据",
+        "对业务逻辑和维护成本的独立检查，而不只是能编译通过"
+      ],
+      "sufficiencyCriteria": [
+        "给出期间、样本量和可核查的质量数据",
+        "说明比较基线，避免只看 PR 数",
+        "同时交代速度、缺陷和维护成本有没有互相牺牲"
+      ],
+      "impact": "提交得快只能说明产量高，说明不了故障是否更少、后续维护是否更轻松。",
+      "nextSteps": "按时间追踪一批自动合并 PR 的后续缺陷、回滚和事故，再与类似任务的原流程比较。属于后续可做的验证，不是作者已经提供的数据。",
+      "basis": "依据上传报告保存的 PR 数量、自述和 CI 相关摘录；未独立核验仓库记录。",
+      "relatedNodes": [
+        "Q1.2",
+        "Q1.4",
+        "Q4",
+        "Q4.5"
+      ],
+      "evidence": [
+        "P06",
+        "P08",
+        "P25",
+        "P26"
+      ]
+    },
+    {
+      "id": "G04",
+      "question": "没有无限 token 的普通团队，照做划算吗？",
+      "category": "使用成本",
+      "origin": "reader_inferred",
+      "priority": "high",
+      "answerStatus": "partial",
+      "sourceProvides": "她承认自己所处的环境 token 基本不限量，建议团队比较“请人做”与“花 token 改好代码库”的投入。",
+      "missing": [
+        "搭建和维护验证工具、Feature Map、eval 要花多少成本",
+        "团队能减少多少人审，Agent 失败或回滚要付出多少代价",
+        "老系统、后端服务和数据平台是否适用，以及何时必须停下来人工处理"
+      ],
+      "sufficiencyCriteria": [
+        "列清前期投入、维护成本与预计回收时间",
+        "至少有一个在不同团队或系统中可复核的试点",
+        "明确自动处理的边界，以及应该转给人的情况"
+      ],
+      "impact": "她能做到，不代表一个预算有限、系统复杂的团队照搬也划算。",
+      "nextSteps": "先挑一个风险不高的服务小规模试用，记录 token、人审时间、缺陷和回滚，再决定是否扩大。",
+      "basis": "依据上传报告中的成本讨论整理；没有企业真实成本表。",
+      "relatedNodes": [
+        "Q2.4",
+        "Q5",
+        "Q5.1"
+      ],
+      "evidence": [
+        "P13",
+        "P28",
+        "P29"
+      ]
+    },
+    {
+      "id": "G05",
+      "question": "Skill 评估拿到满分，就能相信它了吗？",
+      "category": "评估可靠性",
+      "origin": "reader_inferred",
+      "priority": "high",
+      "answerStatus": "partial",
+      "sourceProvides": "她讲了写评分规则、用多个子 Agent、跨模型运行，以及反复修改 Skill、把分数提高。",
+      "missing": [
+        "有没有一套从未用于调参的独立测试题",
+        "自动评分与人工检查、真实故障结果是否一致",
+        "换模型、换任务或使用一段时间以后，还能否保持效果"
+      ],
+      "sufficiencyCriteria": [
+        "优化用的题目与最终验收题目分开",
+        "用人工审核或真实故障检验评分是否可靠",
+        "定期复测新任务，并公开没有通过的案例"
+      ],
+      "impact": "同一套题目刷到 10/10，不代表换到真实项目也不会出错。",
+      "nextSteps": "留一批隐藏任务做最终验收，再定期抽查真实工作结果，看离线分数和实际表现是否一致。",
+      "basis": "依据上传报告 Q3.3 与 P17—P19 审阅；没有完整视频或独立评测结果。",
+      "relatedNodes": [
+        "Q3.2",
+        "Q3.3"
+      ],
+      "evidence": [
+        "P17",
+        "P18",
+        "P19"
+      ]
+    }
+  ],
+  "insights": [
+    {
+      "id": "I01",
+      "claim": "别只让 Agent 写代码，还要让它自己运行、自己查错",
+      "whyItMatters": "她以前只能把性能截图发给 Agent 猜原因，猜错再重来。现在她更看重让 Agent 能亲自操作应用、看到运行结果。",
+      "whyDifferent": "她把改进重点放在验证工具和运行环境上，而不只是换模型或改 Prompt。",
+      "certainty": "作者经验；验证覆盖仍待证明",
+      "relatedNodes": [
+        "Q2.1",
+        "Q2.3",
+        "Q0"
+      ]
+    },
+    {
+      "id": "I02",
+      "claim": "会点按钮还不够，Agent 得知道功能藏在哪里",
+      "whyItMatters": "Feature Map 写的是用户怎么找到功能、用什么快捷键、如何定位界面元素。有人报告某个 PR 标签异常时，Agent 才知道从哪里查起。",
+      "whyDifferent": "这份文档是给 Agent 操作产品用的导航，不只是供工程师阅读的技术说明。",
+      "certainty": "作者有实际示例；需持续维护",
+      "relatedNodes": [
+        "Q2.2",
+        "Q2.4"
+      ]
+    },
+    {
+      "id": "I03",
+      "claim": "同一条 Review 意见出现好几次，就考虑交给 CI",
+      "whyItMatters": "她建议把能机械检查的要求写成 lint 或 CI 规则。比如某类导入不允许出现，就让构建失败，而不是要求每个 Agent 牢记。",
+      "whyDifferent": "把反复出现的人工检查写进工具，减少下一次重复提醒。",
+      "certainty": "作者建议；仅适用于能明确检查的规则",
+      "relatedNodes": [
+        "Q4.6",
+        "Q4.4"
+      ]
+    }
+  ]
+}
